@@ -1,0 +1,58 @@
+# values.yaml for sadmc-agent
+
+# ─── REQUIRED ───────────────────────────────────────────────────
+sadmc:
+  apiKey: ""                          # Paste your API Key from the dashboard
+  saasEndpoint: "https://api.sadmc.io"
+
+# ─── AGENT DOCKER IMAGE ─────────────────────────────────────────
+agent:
+  image:
+    repository: "yourusername/sadmc-agent"
+    tag: "1.0.0"
+    pullPolicy: IfNotPresent
+  resources:
+    requests: { cpu: "100m", memory: "128Mi" }
+    limits:   { cpu: "500m", memory: "512Mi" }
+
+# ─── PROMETHEUS ─────────────────────────────────────────────────
+prometheus:
+  # auto     = Helm queries the live cluster at install time.
+  #            If an existing Prometheus is found → connect to it.
+  #            If NOT found     → Helm installs a minimal Prometheus automatically.
+  # existing = Skip detection. Point to your own Prometheus via existingUrl.
+  # install  = Always install a fresh Prometheus regardless of what's in the cluster.
+  mode: "auto"
+  existingUrl: ""    # Only used when mode=existing. e.g. http://prometheus-server.monitoring:9090
+  install:
+    storageSize: "10Gi"
+    storageClass: "" # Leave empty to use cluster default StorageClass
+    retention: "15d"
+
+# ─── SERVICE DISCOVERY ──────────────────────────────────────────
+discovery:
+  excludeNamespaces:
+    - "kube-system"
+    - "kube-public"
+    - "sadmc"
+
+# ─── REMEDIATION ─────────────────────────────────────────────────
+remediation:
+  enabled: true
+  confidenceThreshold: 0.85
+  rules:
+    CPU_HOG:
+      action: "THROTTLE_CPU"
+      cpu_limit: "200m"
+      cooldown_seconds: 300
+    MEMORY_LEAK:
+      action: "RESTART_POD"
+      cooldown_seconds: 180
+    NETWORK_DELAY:
+      action: "SCALE_UP"
+      replica_increase: 1
+      max_replicas: 10
+      cooldown_seconds: 600
+    NORMAL:
+      action: "NO_ACTION"
+

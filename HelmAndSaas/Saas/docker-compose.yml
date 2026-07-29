@@ -1,0 +1,33 @@
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: sadmc-timescaledb
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sadmc
+      POSTGRES_PASSWORD: sadmc_dev_password
+      POSTGRES_DB: sadmc_shield
+    ports:
+      - "5433:5432"
+    volumes:
+      - sadmc_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sadmc -d sadmc_shield"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: sadmc-redis
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  sadmc_pg_data:

@@ -1,0 +1,44 @@
+<h1 class="mb-6 text-xl font-semibold text-slate-900">Remediation Log</h1>
+
+<div class="overflow-hidden rounded-lg border border-slate-200 bg-white">
+  <table class="w-full text-left text-sm">
+    <thead class="bg-slate-50 text-xs uppercase text-slate-500">
+      <tr>
+        <th class="px-4 py-2">Time</th>
+        <th class="px-4 py-2">Service</th>
+        <th class="px-4 py-2">Action</th>
+        <th class="px-4 py-2">Status</th>
+        <th class="px-4 py-2">Duration</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (r of remediations(); track r.id) {
+        <tr class="border-t border-slate-100">
+          <td class="px-4 py-2 text-slate-500">{{ r.executed_at | date: 'short' }}</td>
+          <td class="px-4 py-2">{{ r.service_name }} <span class="text-slate-400">/ {{ r.namespace }}</span></td>
+          <td class="px-4 py-2 font-mono text-xs">{{ r.action_type }}</td>
+          <td class="px-4 py-2">
+            <span
+              class="rounded-full px-2 py-0.5 text-xs"
+              [class]="
+                r.status === 'success'
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : r.status === 'failed'
+                    ? 'bg-rose-100 text-rose-800'
+                    : 'bg-slate-200 text-slate-600'
+              "
+              >{{ r.status }}</span
+            >
+          </td>
+          <td class="px-4 py-2 text-slate-500">{{ r.duration_ms ? r.duration_ms + ' ms' : '—' }}</td>
+        </tr>
+      } @empty {
+        <tr>
+          <td colspan="5" class="px-4 py-6 text-center text-slate-400">
+            {{ loading() ? 'Loading…' : 'No remediation actions yet.' }}
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</div>

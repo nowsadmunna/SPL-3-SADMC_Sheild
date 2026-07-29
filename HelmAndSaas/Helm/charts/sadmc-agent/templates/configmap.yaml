@@ -1,0 +1,24 @@
+{{- $releaseNs := .Release.Namespace }}
+{{- $excludeList := .Values.discovery.excludeNamespaces | default list }}
+{{- if not (has $releaseNs $excludeList) }}
+{{- $excludeList = append $excludeList $releaseNs }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "sadmc-agent.fullname" . }}-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sadmc-agent.labels" . | nindent 4 }}
+data:
+  SAAS_ENDPOINT: {{ .Values.sadmc.saasEndpoint | quote }}
+  # Helm lookup resolves these at install/upgrade time against the live cluster
+  PROMETHEUS_MODE: {{ include "sadmc-agent.prometheus.effectiveMode" . | trim | quote }}
+  PROMETHEUS_URL: {{ include "sadmc-agent.prometheus.effectiveUrl"   . | trim | quote }}
+  # Fallback URL for the Prometheus the chart auto-installs (used when mode=install)
+  INSTALLED_PROMETHEUS_URL: {{ printf "http://%s-prometheus.%s.svc.cluster.local:9090" (include "sadmc-agent.fullname" .) .Release.Namespace | quote }}
+  EXCLUDE_NAMESPACES: {{ join "," $excludeList | quote }}
+  REMEDIATION_ENABLED: {{ .Values.remediation.enabled | quote }}
+  CONFIDENCE_THRESHOLD: {{ .Values.remediation.confidenceThreshold | quote }}
+  REMEDIATION_RULES: {{ .Values.remediation.rules | toJson | quote }}
+

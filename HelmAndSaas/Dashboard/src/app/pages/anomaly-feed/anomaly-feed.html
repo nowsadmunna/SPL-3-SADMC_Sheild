@@ -1,0 +1,19 @@
+<h1 class="mb-6 text-xl font-semibold text-slate-900">Anomaly Feed <span class="text-sm font-normal text-emerald-600">● Live</span></h1>
+
+<div class="space-y-2">
+  @for (a of anomalies(); track a.id) {
+    <div class="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3">
+      <div class="flex items-center gap-3">
+        <app-anomaly-badge [type]="a.anomaly_type" />
+        <span class="font-medium text-slate-900">{{ a.service_name }}</span>
+        <span class="text-xs text-slate-400">{{ a.namespace }}</span>
+      </div>
+      <div class="flex items-center gap-4 text-xs text-slate-500">
+        <span>{{ (a.confidence * 100).toFixed(0) }}% confidence</span>
+        <span>{{ a.timestamp | date: 'short' }}</span>
+      </div>
+    </div>
+  } @empty {
+    <p class="text-sm text-slate-400">{{ loading() ? 'Loading…' : 'No anomalies detected yet.' }}</p>
+  }
+</div>

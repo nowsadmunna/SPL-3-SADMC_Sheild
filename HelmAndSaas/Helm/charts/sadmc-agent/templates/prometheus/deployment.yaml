@@ -1,0 +1,41 @@
+{{- if include "sadmc-agent.prometheus.shouldInstall" . }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sadmc-agent.fullname" . }}-prometheus
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sadmc-agent.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "sadmc-agent.fullname" . }}-prometheus
+  template:
+    metadata:
+      labels:
+        app: {{ include "sadmc-agent.fullname" . }}-prometheus
+    spec:
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.45.0
+          args:
+            - "--config.file=/etc/prometheus/prometheus.yml"
+            - "--storage.tsdb.path=/prometheus"
+            - "--storage.tsdb.retention.time={{ .Values.prometheus.install.retention }}"
+          ports:
+            - containerPort: 9090
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+            - name: storage
+              mountPath: /prometheus
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "sadmc-agent.fullname" . }}-prometheus-config
+        - name: storage
+          persistentVolumeClaim:
+            claimName: {{ include "sadmc-agent.fullname" . }}-prometheus-storage
+{{- end }}
+

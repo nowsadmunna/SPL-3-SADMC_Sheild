@@ -1,0 +1,74 @@
+<div class="min-h-screen bg-slate-50">
+  <header class="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-3">
+    <div class="flex items-center gap-4">
+      <span class="text-lg font-semibold text-slate-900">SADMC Shield</span>
+
+      @if (clusters.clusters().length > 0) {
+        <select
+          class="rounded-md border border-slate-300 px-2 py-1 text-sm"
+          [value]="clusters.selectedClusterId()"
+          (change)="onClusterChange($event)"
+        >
+          @for (cluster of clusters.clusters(); track cluster.id) {
+            <option [value]="cluster.id">{{ cluster.cluster_uuid.slice(0, 8) }}… ({{ cluster.status }})</option>
+          }
+        </select>
+      } @else {
+        <a routerLink="/dashboard/setup" class="text-sm font-medium text-slate-500 underline hover:text-slate-900"
+          >No clusters yet — connect one</a
+        >
+      }
+    </div>
+
+    <div class="flex items-center gap-4 text-sm">
+      <span class="text-slate-500">{{ auth.tenant()?.organization_name }}</span>
+      <button (click)="logout()" class="font-medium text-slate-600 hover:text-slate-900">Log out</button>
+    </div>
+  </header>
+
+  <div class="flex">
+    <nav class="w-48 shrink-0 border-r border-slate-200 bg-white px-3 py-4">
+      <a
+        routerLink="/dashboard"
+        routerLinkActive="bg-slate-100 text-slate-900"
+        [routerLinkActiveOptions]="{ exact: true }"
+        class="mb-1 block rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+        >Overview</a
+      >
+      <a
+        routerLink="/dashboard/setup"
+        routerLinkActive="bg-slate-100 text-slate-900"
+        class="mb-1 block rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+        >Connect a Cluster</a
+      >
+      <a
+        routerLink="/dashboard/anomalies"
+        routerLinkActive="bg-slate-100 text-slate-900"
+        class="mb-1 block rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+        >Anomaly Feed</a
+      >
+      <a
+        routerLink="/dashboard/remediations"
+        routerLinkActive="bg-slate-100 text-slate-900"
+        class="mb-1 block rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+        >Remediation Log</a
+      >
+      <a
+        routerLink="/dashboard/metrics"
+        routerLinkActive="bg-slate-100 text-slate-900"
+        class="mb-1 block rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+        >Metrics</a
+      >
+      <a
+        routerLink="/dashboard/settings"
+        routerLinkActive="bg-slate-100 text-slate-900"
+        class="block rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+        >Settings</a
+      >
+    </nav>
+
+    <main class="min-w-0 flex-1 p-6">
+      <router-outlet />
+    </main>
+  </div>
+</div>

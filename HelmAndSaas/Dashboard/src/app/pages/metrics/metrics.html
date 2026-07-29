@@ -1,0 +1,34 @@
+<div class="mb-6 flex items-center justify-between">
+  <h1 class="text-xl font-semibold text-slate-900">Metrics</h1>
+
+  @if (services().length > 0) {
+    <select
+      class="rounded-md border border-slate-300 px-2 py-1 text-sm"
+      [value]="selectedService()"
+      (change)="onServiceChange($event)"
+    >
+      @for (svc of services(); track svc.service_name) {
+        <option [value]="svc.service_name">{{ svc.service_name }}</option>
+      }
+    </select>
+  }
+</div>
+
+@if (loading()) {
+  <p class="text-sm text-slate-400">Loading…</p>
+} @else if (services().length === 0) {
+  <p class="text-sm text-slate-400">No services discovered yet for this cluster.</p>
+} @else {
+  <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+    @for (panel of panels; track panel.key) {
+      <div class="rounded-lg border border-slate-200 bg-white p-4">
+        <p class="mb-2 text-sm font-medium text-slate-700">{{ panel.title }}</p>
+        <div class="h-56">
+          @if (chartData()[panel.key]; as data) {
+            <canvas baseChart [type]="'line'" [data]="data" [options]="chartOptions"></canvas>
+          }
+        </div>
+      </div>
+    }
+  </div>
+}

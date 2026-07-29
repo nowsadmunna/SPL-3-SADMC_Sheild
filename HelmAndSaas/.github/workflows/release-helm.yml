@@ -1,0 +1,60 @@
+name: Release Helm Chart
+
+on:
+  push:
+    tags:
+      - "helm-*"          # trigger on tags like helm-1.0.0, helm-1.1.0
+  workflow_dispatch:      # allow manual runs from GitHub UI
+
+permissions:
+  contents: write         # needed to push to gh-pages branch
+  pages: write
+
+jobs:
+  release:
+    name: Package & Publish Helm Chart
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout the repo ──────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # full history needed by chart-releaser
+
+      # ── 2. Configure Git identity ─────────────────────────────────────
+      - name: Configure Git
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      # ── 3. Install Helm ───────────────────────────────────────────────
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: "3.15.0"
+
+      # ── 4. Lint the chart before packaging ───────────────────────────
+      - name: Lint chart
+        run: helm lint Helm/charts/sadmc-agent
+
+      # ── 5. Package chart into .tgz ────────────────────────────────────
+      - name: Package chart
+        run: |
+          mkdir -p .cr-release-packages
+          helm package Helm/charts/sadmc-agent \
+            --destination .cr-release-packages
+
+      # ── 6. Use chart-releaser to publish to GitHub Pages ─────────────
+      #   This tool:
+      #   - Creates a GitHub Release for the .tgz
+      #   - Updates index.yaml on the gh-pages branch
+      #   so users can do: helm repo add sadmc https://<username>.github.io/<repo>
+      - name: Run chart-releaser
+        uses: helm/chart-releaser-action@v1.6.0
+        env:
+          CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+        with:
+          charts_dir: Helm/charts
+          skip_packaging: true      # we already packaged above
+          packages_with_index: true

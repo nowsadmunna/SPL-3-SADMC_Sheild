@@ -1,0 +1,12 @@
+apiVersion: v2
+name: sadmc-agent
+description: Real-time anomaly detection and auto-remediation agent for SADMC Shield.
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+home: https://sadmc.io
+icon: https://raw.githubusercontent.com/mdnowsadhossenmunna/HelmAndSaas/main/logo.png
+maintainers:
+  - name: Md. Nowsad Hossen Munna
+    email: munna@example.com
+

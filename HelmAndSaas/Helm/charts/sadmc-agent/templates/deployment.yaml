@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sadmc-agent.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sadmc-agent.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "sadmc-agent.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "sadmc-agent.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "sadmc-agent.fullname" . }}
+      containers:
+        - name: sadmc-agent
+          image: "{{ .Values.agent.image.repository }}:{{ .Values.agent.image.tag }}"
+          imagePullPolicy: {{ .Values.agent.image.pullPolicy }}
+          env:
+            - name: SADMC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "sadmc-agent.fullname" . }}-secret
+                  key: api-key
+            - name: SAAS_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "sadmc-agent.fullname" . }}-config
+                  key: SAAS_ENDPOINT
+            - name: PROMETHEUS_MODE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "sadmc-agent.fullname" . }}-config
+                  key: PROMETHEUS_MODE
+            - name: PROMETHEUS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "sadmc-agent.fullname" . }}-config
+                  key: PROMETHEUS_URL
+            - name: INSTALLED_PROMETHEUS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "sadmc-agent.fullname" . }}-config
+                  key: INSTALLED_PROMETHEUS_URL
+            - name: EXCLUDE_NAMESPACES
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "sadmc-agent.fullname" . }}-config
+                  key: EXCLUDE_NAMESPACES
+            - name: REMEDIATION_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "sadmc-agent.fullname" . }}-config
+                  key: REMEDIATION_ENABLED
+            - name: CONFIDENCE_THRESHOLD
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "sadmc-agent.fullname" . }}-config
+                  key: CONFIDENCE_THRESHOLD
+            - name: REMEDIATION_RULES
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "sadmc-agent.fullname" . }}-config
+                  key: REMEDIATION_RULES
+          resources:
+            {{- toYaml .Values.agent.resources | nindent 12 }}

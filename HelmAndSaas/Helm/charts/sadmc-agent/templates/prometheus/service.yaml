@@ -1,0 +1,16 @@
+{{- if include "sadmc-agent.prometheus.shouldInstall" . }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "sadmc-agent.fullname" . }}-prometheus
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sadmc-agent.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: {{ include "sadmc-agent.fullname" . }}-prometheus
+  ports:
+    - port: 9090
+      targetPort: 9090
+{{- end }}
+

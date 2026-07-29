@@ -1,0 +1,22 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "sadmc-agent.fullname" . }}
+  labels:
+    {{- include "sadmc-agent.labels" . | nindent 4 }}
+rules:
+  # Service Discovery — READ ONLY
+  - apiGroups: [""]
+    resources: ["pods", "services", "namespaces", "nodes", "endpoints"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "statefulsets"]
+    verbs: ["get", "list", "watch"]
+
+  # Remediation — WRITE (minimal surface)
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["delete"]                   # RESTART_POD
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["patch", "update", "get"]   # THROTTLE_CPU + SCALE_UP
