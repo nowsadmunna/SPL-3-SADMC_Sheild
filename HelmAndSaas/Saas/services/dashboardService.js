@@ -43,7 +43,8 @@ export async function listAnomalies(tenantId, clusterId, { limit = 50, offset = 
 export async function listRemediations(tenantId, clusterId, { limit = 50, offset = 0 } = {}) {
   return withTenant(tenantId, async (client) => {
     const result = await client.query(
-      `SELECT r.id, r.service_name, r.namespace, r.action_type, r.status, r.executed_at, r.duration_ms, r.error_message
+      `SELECT r.id, r.service_name, r.namespace, r.action_type, r.status, r.executed_at, r.duration_ms, r.error_message,
+              COUNT(*) OVER() AS total_count
        FROM remediation_actions r
        JOIN clusters c ON c.id = r.cluster_id
        WHERE r.cluster_id = $1 AND c.tenant_id = $2
@@ -51,7 +52,9 @@ export async function listRemediations(tenantId, clusterId, { limit = 50, offset
        LIMIT $3 OFFSET $4`,
       [clusterId, tenantId, limit, offset]
     );
-    return result.rows;
+    const total = result.rows.length > 0 ? Number(result.rows[0].total_count) : 0;
+    const remediations = result.rows.map(({ total_count, ...row }) => row);
+    return { remediations, total };
   });
 }
 

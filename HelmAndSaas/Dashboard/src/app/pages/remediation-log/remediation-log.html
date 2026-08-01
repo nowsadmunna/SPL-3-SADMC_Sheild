@@ -1,8 +1,8 @@
-<h1 class="mb-6 text-xl font-semibold text-slate-900">Remediation Log</h1>
+<h1 class="mb-6 text-xl font-semibold text-slate-900 dark:text-slate-100">Remediation Log</h1>
 
-<div class="overflow-hidden rounded-lg border border-slate-200 bg-white">
+<div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
   <table class="w-full text-left text-sm">
-    <thead class="bg-slate-50 text-xs uppercase text-slate-500">
+    <thead class="bg-brand-50 text-xs uppercase text-brand-700 dark:bg-slate-900 dark:text-brand-300">
       <tr>
         <th class="px-4 py-2">Time</th>
         <th class="px-4 py-2">Service</th>
@@ -13,32 +13,79 @@
     </thead>
     <tbody>
       @for (r of remediations(); track r.id) {
-        <tr class="border-t border-slate-100">
-          <td class="px-4 py-2 text-slate-500">{{ r.executed_at | date: 'short' }}</td>
-          <td class="px-4 py-2">{{ r.service_name }} <span class="text-slate-400">/ {{ r.namespace }}</span></td>
-          <td class="px-4 py-2 font-mono text-xs">{{ r.action_type }}</td>
+        <tr class="border-t border-slate-100 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-700/50">
+          <td class="px-4 py-2 text-slate-500 dark:text-slate-400">{{ r.executed_at | date: 'short' }}</td>
+          <td class="px-4 py-2 text-slate-900 dark:text-slate-100">{{ r.service_name }} <span class="text-slate-400 dark:text-slate-500">/ {{ r.namespace }}</span></td>
+          <td class="px-4 py-2">
+            <span
+              class="rounded-full px-2 py-0.5 font-mono text-xs"
+              [class]="actionBadgeClass[r.action_type] ?? 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300'"
+              >{{ r.action_type }}</span
+            >
+          </td>
           <td class="px-4 py-2">
             <span
               class="rounded-full px-2 py-0.5 text-xs"
               [class]="
                 r.status === 'success'
-                  ? 'bg-emerald-100 text-emerald-800'
+                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
                   : r.status === 'failed'
-                    ? 'bg-rose-100 text-rose-800'
-                    : 'bg-slate-200 text-slate-600'
+                    ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300'
+                    : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
               "
               >{{ r.status }}</span
             >
           </td>
-          <td class="px-4 py-2 text-slate-500">{{ r.duration_ms ? r.duration_ms + ' ms' : '—' }}</td>
+          <td class="px-4 py-2 text-slate-500 dark:text-slate-400">{{ r.duration_ms ? r.duration_ms + ' ms' : '—' }}</td>
         </tr>
       } @empty {
         <tr>
-          <td colspan="5" class="px-4 py-6 text-center text-slate-400">
+          <td colspan="5" class="px-4 py-6 text-center text-slate-400 dark:text-slate-500">
             {{ loading() ? 'Loading…' : 'No remediation actions yet.' }}
           </td>
         </tr>
       }
     </tbody>
   </table>
+
+  <div class="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-sm dark:border-slate-700">
+    <div class="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+      <span>
+        @if (total() === 0) {
+          No results
+        } @else {
+          Showing {{ rangeStart() }}–{{ rangeEnd() }} of {{ total() }}
+        }
+      </span>
+      <select
+        class="ml-2 rounded-md border border-slate-300 bg-white px-1.5 py-1 text-xs text-slate-700 focus:border-brand-500 focus:outline-none dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200"
+        [value]="pageSize()"
+        (change)="onPageSizeChange($event)"
+      >
+        @for (size of pageSizeOptions; track size) {
+          <option [value]="size">{{ size }} / page</option>
+        }
+      </select>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <span class="text-slate-500 dark:text-slate-400">Page {{ page() }} of {{ totalPages() }}</span>
+      <div class="flex gap-1">
+        <button
+          (click)="prevPage()"
+          [disabled]="page() <= 1"
+          class="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
+        >
+          Previous
+        </button>
+        <button
+          (click)="nextPage()"
+          [disabled]="page() >= totalPages()"
+          class="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  </div>
 </div>

@@ -16,6 +16,7 @@ spec:
       labels:
         app: {{ include "sadmc-agent.fullname" . }}-prometheus
     spec:
+      serviceAccountName: {{ include "sadmc-agent.fullname" . }}-prometheus
       containers:
         - name: prometheus
           image: prom/prometheus:v2.45.0

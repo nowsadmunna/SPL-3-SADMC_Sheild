@@ -1,27 +1,30 @@
-<h1 class="mb-1 text-xl font-semibold text-slate-900">Connect a Cluster</h1>
-<p class="mb-6 text-sm text-slate-500">
+<h1 class="mb-1 text-xl font-semibold text-slate-900 dark:text-slate-100">Connect a Cluster</h1>
+<p class="mb-6 text-sm text-slate-500 dark:text-slate-400">
   Install the SADMC Shield agent into your Kubernetes cluster with a single Helm command.
 </p>
 
 <!-- Prerequisites -->
-<div class="mb-6 rounded-lg border border-slate-200 bg-white p-4">
-  <h2 class="mb-2 text-sm font-semibold text-slate-900">Prerequisites</h2>
-  <ul class="list-inside list-disc space-y-1 text-sm text-slate-600">
-    <li>A running Kubernetes cluster and <code class="rounded bg-slate-100 px-1">kubectl</code> configured against it</li>
-    <li><code class="rounded bg-slate-100 px-1">helm</code> (v3+) installed locally</li>
+<div class="mb-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+  <h2 class="mb-2 text-sm font-semibold text-slate-900 dark:text-slate-100">Prerequisites</h2>
+  <ul class="list-inside list-disc space-y-1 text-sm text-slate-600 dark:text-slate-300">
+    <li>A running Kubernetes cluster and <code class="rounded bg-brand-50 px-1 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">kubectl</code> configured against it</li>
+    <li><code class="rounded bg-brand-50 px-1 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">helm</code> (v3+) installed locally</li>
     <li>Network reachability from the cluster to the SaaS endpoint below</li>
   </ul>
 </div>
 
 <!-- Step 1 -->
-<div class="mb-6 rounded-lg border border-slate-200 bg-white p-4">
-  <h2 class="mb-2 text-sm font-semibold text-slate-900">Step 1 — Get an API Key</h2>
+<div class="mb-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+  <h2 class="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+    <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white">1</span>
+    Get an API Key
+  </h2>
 
   @if (hasActiveKey() && !generatedKey()) {
-    <p class="mb-3 text-sm text-slate-600">
+    <p class="mb-3 text-sm text-slate-600 dark:text-slate-300">
       You already have an active API key. If you saved its plaintext value when you created it, paste it
       directly into the command below. Otherwise generate a new one here — you can revoke old ones
-      afterwards from <span class="font-medium">Settings</span>.
+      afterwards from <span class="font-medium text-brand-700 dark:text-brand-300">Settings</span>.
     </p>
   }
 
@@ -31,42 +34,45 @@
         [ngModel]="newKeyName()"
         (ngModelChange)="newKeyName.set($event)"
         placeholder="Key name (e.g. prod-cluster)"
-        class="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+        class="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
       />
       <button
         (click)="generateKey()"
         [disabled]="generating()"
-        class="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+        class="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand-700 disabled:opacity-50"
       >
         {{ generating() ? 'Generating…' : 'Generate key' }}
       </button>
     </div>
   } @else {
-    <div class="rounded-md border border-amber-300 bg-amber-50 p-3">
-      <p class="mb-2 text-sm font-medium text-amber-900">
+    <div class="rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-900/30">
+      <p class="mb-2 text-sm font-medium text-amber-900 dark:text-amber-200">
         Copy this key now — it won't be shown again, and it's already filled into the command below.
       </p>
-      <code class="block overflow-x-auto rounded-md bg-white px-3 py-2 text-xs">{{ generatedKey() }}</code>
+      <code class="block overflow-x-auto rounded-md bg-white px-3 py-2 text-xs dark:bg-slate-800 dark:text-slate-100">{{ generatedKey() }}</code>
     </div>
   }
 </div>
 
 <!-- Step 2 -->
-<div class="mb-6 rounded-lg border border-slate-200 bg-white p-4">
-  <h2 class="mb-2 text-sm font-semibold text-slate-900">Step 2 — Prometheus mode</h2>
-  <p class="mb-3 text-sm text-slate-600">How should the agent get metrics for your services?</p>
+<div class="mb-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+  <h2 class="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+    <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white">2</span>
+    Prometheus mode
+  </h2>
+  <p class="mb-3 text-sm text-slate-600 dark:text-slate-300">How should the agent get metrics for your services?</p>
 
-  <div class="mb-3 flex flex-wrap gap-4 text-sm">
+  <div class="mb-3 flex flex-wrap gap-4 text-sm text-slate-700 dark:text-slate-300">
     <label class="flex items-center gap-2">
-      <input type="radio" name="promMode" value="auto" [ngModel]="prometheusMode()" (ngModelChange)="prometheusMode.set($event)" />
+      <input type="radio" name="promMode" value="auto" class="accent-brand-600" [ngModel]="prometheusMode()" (ngModelChange)="prometheusMode.set($event)" />
       Auto-detect (or install one if none found) — recommended
     </label>
     <label class="flex items-center gap-2">
-      <input type="radio" name="promMode" value="existing" [ngModel]="prometheusMode()" (ngModelChange)="prometheusMode.set($event)" />
+      <input type="radio" name="promMode" value="existing" class="accent-brand-600" [ngModel]="prometheusMode()" (ngModelChange)="prometheusMode.set($event)" />
       I already have Prometheus
     </label>
     <label class="flex items-center gap-2">
-      <input type="radio" name="promMode" value="install" [ngModel]="prometheusMode()" (ngModelChange)="prometheusMode.set($event)" />
+      <input type="radio" name="promMode" value="install" class="accent-brand-600" [ngModel]="prometheusMode()" (ngModelChange)="prometheusMode.set($event)" />
       Always install a fresh one
     </label>
   </div>
@@ -76,26 +82,29 @@
       [ngModel]="existingPrometheusUrl()"
       (ngModelChange)="existingPrometheusUrl.set($event)"
       placeholder="http://prometheus-server.monitoring:9090"
-      class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+      class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
     />
   }
 </div>
 
 <!-- Step 3 -->
-<div class="mb-6 rounded-lg border border-slate-200 bg-white p-4">
-  <h2 class="mb-2 text-sm font-semibold text-slate-900">Step 3 — Install the agent</h2>
-  <p class="mb-3 text-sm text-slate-600">
+<div class="mb-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+  <h2 class="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+    <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white">3</span>
+    Install the agent
+  </h2>
+  <p class="mb-3 text-sm text-slate-600 dark:text-slate-300">
     Run this from the root of the project repository (it references the Helm chart at
-    <code class="rounded bg-slate-100 px-1">HelmAndSaas/Helm/charts/sadmc-agent</code>). On a separate
+    <code class="rounded bg-brand-50 px-1 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">HelmAndSaas/Helm/charts/sadmc-agent</code>). On a separate
     machine, copy that chart directory across first, or publish it to a Helm repo and use
-    <code class="rounded bg-slate-100 px-1">helm repo add</code> instead.
+    <code class="rounded bg-brand-50 px-1 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">helm repo add</code> instead.
   </p>
 
   <div class="relative">
     <pre class="overflow-x-auto rounded-md bg-slate-900 px-4 py-3 text-xs text-slate-100"><code>{{ helmInstallCommand() }}</code></pre>
     <button
       (click)="copyCommand()"
-      class="absolute right-2 top-2 rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-200 hover:bg-slate-700"
+      class="absolute right-2 top-2 rounded-md border border-brand-500 bg-brand-600 px-2 py-1 text-xs text-white hover:bg-brand-700"
     >
       Copy
     </button>
@@ -103,14 +112,17 @@
 </div>
 
 <!-- Step 4 -->
-<div class="rounded-lg border border-slate-200 bg-white p-4">
-  <h2 class="mb-2 text-sm font-semibold text-slate-900">Step 4 — Verify</h2>
-  <ul class="list-inside list-disc space-y-1 text-sm text-slate-600">
+<div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+  <h2 class="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+    <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white">4</span>
+    Verify
+  </h2>
+  <ul class="list-inside list-disc space-y-1 text-sm text-slate-600 dark:text-slate-300">
     <li>
-      <code class="rounded bg-slate-100 px-1">kubectl logs -n sadmc -l app=sadmc-agent -f</code> should show a
+      <code class="rounded bg-brand-50 px-1 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">kubectl logs -n sadmc -l app=sadmc-agent -f</code> should show a
       discovery + inference cycle every 15 seconds.
     </li>
     <li>Your cluster will appear in the selector at the top of this dashboard within a few seconds.</li>
-    <li>Check the <span class="font-medium">Overview</span> page for discovered services, or the <span class="font-medium">Anomaly Feed</span> for live detections.</li>
+    <li>Check the <span class="font-medium text-brand-700 dark:text-brand-300">Overview</span> page for discovered services, or the <span class="font-medium text-brand-700 dark:text-brand-300">Anomaly Feed</span> for live detections.</li>
   </ul>
 </div>

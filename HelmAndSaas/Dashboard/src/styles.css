@@ -1,1 +1,25 @@
 @import "tailwindcss";
+
+/* Class-based dark mode: `dark:` variants apply when a `.dark` class is
+   present on an ancestor (ThemeService toggles this on <html>), instead of
+   only following the OS media query — this is what makes a manual toggle
+   button actually override system preference. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Brand scale — reuses the same validated blue used for chart lines
+   (dataviz skill's categorical slot 1 / sequential hue), so buttons,
+   links, nav, and chart series all read as one consistent color system.
+   800/900 exist for dark-surface tints (e.g. active nav state, table
+   headers) where the light 50/100 washes would be invisible. */
+@theme {
+  --color-brand-50: #eef5fd;
+  --color-brand-100: #cde2fb;
+  --color-brand-200: #9ec5f4;
+  --color-brand-300: #6da7ec;
+  --color-brand-400: #3987e5;
+  --color-brand-500: #2a78d6;
+  --color-brand-600: #256abf;
+  --color-brand-700: #184f95;
+  --color-brand-800: #0d366b;
+  --color-brand-900: #0a2b57;
+}

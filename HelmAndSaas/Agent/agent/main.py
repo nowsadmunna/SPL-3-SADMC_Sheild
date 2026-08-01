@@ -53,7 +53,8 @@ class SADMCAgent:
             logger.info("No services discovered.")
             return
 
-        logger.info(f"Discovered services list: {[f'{s['namespace']}/{s['name']}' for s in services]}")
+        service_labels = [f"{s['namespace']}/{s['name']}" for s in services]
+        logger.info(f"Discovered services list: {service_labels}")
 
         # Step 2: Metrics Collection
         collected = await self.metrics_collector.collect(services)

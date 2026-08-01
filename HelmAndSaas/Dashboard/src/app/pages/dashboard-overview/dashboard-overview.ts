@@ -1,7 +1,7 @@
 import { Component, effect, signal } from '@angular/core';
 import { ClusterService } from '../../core/cluster.service';
 import { AnomalyType, ServiceSummary } from '../../core/models';
-import { AnomalyBadge } from '../../shared/anomaly-badge/anomaly-badge';
+import { ANOMALY_BORDER_CLASS, AnomalyBadge } from '../../shared/anomaly-badge/anomaly-badge';
 
 interface ServiceHealth {
   service_name: string;
@@ -17,6 +17,7 @@ interface ServiceHealth {
 export class DashboardOverview {
   readonly serviceHealth = signal<ServiceHealth[]>([]);
   readonly loading = signal(false);
+  readonly borderClass = ANOMALY_BORDER_CLASS;
 
   constructor(private readonly clusters: ClusterService) {
     effect(() => {

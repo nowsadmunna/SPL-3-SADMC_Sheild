@@ -1,16 +1,19 @@
-import { Component, effect, signal } from '@angular/core';
+import { Component, computed, effect, signal } from '@angular/core';
 import { ChartConfiguration } from 'chart.js';
 import { BaseChartDirective } from 'ng2-charts';
 import { ClusterService } from '../../core/cluster.service';
+import { ThemeService } from '../../core/theme.service';
 import { MetricPoint, ServiceSummary } from '../../core/models';
 
 // Small-multiples: one single-series chart per metric, so no two
 // different-scale measures ever share an axis (see dataviz skill —
 // "one axis" rule). Every panel uses the same line color since each is
 // independently titled and there's no cross-panel legend to disambiguate.
-const LINE_COLOR = '#2a78d6'; // categorical slot 1 (blue), per palette.md
-const GRID_COLOR = '#e1e0d9'; // hairline gridline
-const AXIS_COLOR = '#898781'; // muted ink
+// Light/dark pairs are the same categorical-slot-1 / gridline steps used
+// elsewhere in the palette (palette.md); axis/label ink is mode-invariant.
+const LINE_COLOR = { light: '#2a78d6', dark: '#3987e5' };
+const GRID_COLOR = { light: '#e1e0d9', dark: '#2c2c2a' };
+const AXIS_COLOR = '#898781';
 
 interface MetricPanel {
   key: keyof Pick<
@@ -39,19 +42,50 @@ export class Metrics {
   readonly loading = signal(false);
   readonly panels = PANELS;
 
-  readonly chartData = signal<Record<string, ChartConfiguration<'line'>['data']>>({});
-  readonly chartOptions: ChartConfiguration<'line'>['options'] = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: { legend: { display: false } },
-    elements: { point: { radius: 0 }, line: { borderWidth: 2 } },
-    scales: {
-      x: { grid: { color: GRID_COLOR }, ticks: { color: AXIS_COLOR, maxRotation: 0 } },
-      y: { grid: { color: GRID_COLOR }, ticks: { color: AXIS_COLOR } },
-    },
-  };
+  private readonly rawPoints = signal<MetricPoint[]>([]);
 
-  constructor(private readonly clusters: ClusterService) {
+  readonly chartData = computed(() => {
+    const points = this.rawPoints();
+    const dark = this.theme.isDark();
+    const labels = points.map((p) => new Date(p.time).toLocaleTimeString());
+    const color = dark ? LINE_COLOR.dark : LINE_COLOR.light;
+
+    const data: Record<string, ChartConfiguration<'line'>['data']> = {};
+    for (const panel of this.panels) {
+      data[panel.key] = {
+        labels,
+        datasets: [
+          {
+            data: points.map((p) => p[panel.key] ?? 0),
+            borderColor: color,
+            backgroundColor: color,
+            tension: 0.25,
+            fill: false,
+          },
+        ],
+      };
+    }
+    return data;
+  });
+
+  readonly chartOptions = computed<ChartConfiguration<'line'>['options']>(() => {
+    const gridColor = this.theme.isDark() ? GRID_COLOR.dark : GRID_COLOR.light;
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      elements: { point: { radius: 0 }, line: { borderWidth: 2 } },
+      scales: {
+        x: { grid: { color: gridColor }, ticks: { color: AXIS_COLOR, maxRotation: 0 } },
+        y: { grid: { color: gridColor }, ticks: { color: AXIS_COLOR } },
+      },
+    };
+  });
+
+  constructor(
+    private readonly clusters: ClusterService,
+    private readonly theme: ThemeService,
+  ) {
     effect(() => {
       const clusterId = this.clusters.selectedClusterId();
       if (clusterId) void this.loadServices(clusterId);
@@ -79,25 +113,7 @@ export class Metrics {
   private async loadMetrics(clusterId: string, serviceName: string): Promise<void> {
     this.loading.set(true);
     try {
-      const points = await this.clusters.queryMetrics(clusterId, serviceName);
-      const labels = points.map((p) => new Date(p.time).toLocaleTimeString());
-
-      const data: Record<string, ChartConfiguration<'line'>['data']> = {};
-      for (const panel of this.panels) {
-        data[panel.key] = {
-          labels,
-          datasets: [
-            {
-              data: points.map((p) => p[panel.key] ?? 0),
-              borderColor: LINE_COLOR,
-              backgroundColor: LINE_COLOR,
-              tension: 0.25,
-              fill: false,
-            },
-          ],
-        };
-      }
-      this.chartData.set(data);
+      this.rawPoints.set(await this.clusters.queryMetrics(clusterId, serviceName));
     } finally {
       this.loading.set(false);
     }

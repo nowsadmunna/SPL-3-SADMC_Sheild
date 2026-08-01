@@ -1,19 +1,37 @@
-<h1 class="mb-6 text-xl font-semibold text-slate-900">Anomaly Feed <span class="text-sm font-normal text-emerald-600">● Live</span></h1>
+<h1 class="mb-6 flex items-center gap-2 text-xl font-semibold text-slate-900 dark:text-slate-100">
+  Anomaly Feed
+  <span class="inline-flex items-center gap-1 text-sm font-normal text-emerald-600 dark:text-emerald-400">
+    <span class="h-2 w-2 animate-pulse rounded-full bg-emerald-500"></span> Live
+  </span>
+</h1>
 
-<div class="space-y-2">
-  @for (a of anomalies(); track a.id) {
-    <div class="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3">
-      <div class="flex items-center gap-3">
-        <app-anomaly-badge [type]="a.anomaly_type" />
-        <span class="font-medium text-slate-900">{{ a.service_name }}</span>
-        <span class="text-xs text-slate-400">{{ a.namespace }}</span>
-      </div>
-      <div class="flex items-center gap-4 text-xs text-slate-500">
-        <span>{{ (a.confidence * 100).toFixed(0) }}% confidence</span>
-        <span>{{ a.timestamp | date: 'short' }}</span>
-      </div>
-    </div>
-  } @empty {
-    <p class="text-sm text-slate-400">{{ loading() ? 'Loading…' : 'No anomalies detected yet.' }}</p>
-  }
+<div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
+  <table class="w-full text-left text-sm">
+    <thead class="bg-brand-50 text-xs uppercase text-brand-700 dark:bg-slate-900 dark:text-brand-300">
+      <tr>
+        <th class="px-4 py-2">Time</th>
+        <th class="px-4 py-2">Service</th>
+        <th class="px-4 py-2">Type</th>
+        <th class="px-4 py-2">Confidence</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (a of anomalies(); track a.id) {
+        <tr class="border-t border-slate-100 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-700/50">
+          <td class="px-4 py-2 text-slate-500 dark:text-slate-400">{{ a.timestamp | date: 'short' }}</td>
+          <td class="px-4 py-2 text-slate-900 dark:text-slate-100">
+            {{ a.service_name }} <span class="text-slate-400 dark:text-slate-500">/ {{ a.namespace }}</span>
+          </td>
+          <td class="px-4 py-2"><app-anomaly-badge [type]="a.anomaly_type" /></td>
+          <td class="px-4 py-2 font-medium text-brand-600 dark:text-brand-300">{{ (a.confidence * 100).toFixed(0) }}%</td>
+        </tr>
+      } @empty {
+        <tr>
+          <td colspan="4" class="px-4 py-6 text-center text-slate-400 dark:text-slate-500">
+            {{ loading() ? 'Loading…' : 'No anomalies detected yet.' }}
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
 </div>

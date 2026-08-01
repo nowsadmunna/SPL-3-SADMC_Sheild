@@ -49,11 +49,11 @@ dashboardRouter.get(
   asyncRoute(requireOwnedCluster),
   asyncRoute(async (req, res) => {
     const { limit, offset } = req.query;
-    const remediations = await dashboardService.listRemediations(req.tenantId, req.params.id, {
+    const { remediations, total } = await dashboardService.listRemediations(req.tenantId, req.params.id, {
       limit: limit ? parseInt(limit, 10) : undefined,
       offset: offset ? parseInt(offset, 10) : undefined,
     });
-    res.json({ remediations });
+    res.json({ remediations, total });
   })
 );
 

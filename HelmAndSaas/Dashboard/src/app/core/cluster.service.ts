@@ -46,13 +46,16 @@ export class ClusterService {
     return res.anomalies;
   }
 
-  async listRemediations(clusterId: string, limit = 50): Promise<RemediationAction[]> {
-    const res = await firstValueFrom(
-      this.http.get<{ remediations: RemediationAction[] }>(
-        `${API_BASE_URL}/v1/clusters/${clusterId}/remediations?limit=${limit}`,
+  async listRemediations(
+    clusterId: string,
+    limit = 50,
+    offset = 0,
+  ): Promise<{ remediations: RemediationAction[]; total: number }> {
+    return firstValueFrom(
+      this.http.get<{ remediations: RemediationAction[]; total: number }>(
+        `${API_BASE_URL}/v1/clusters/${clusterId}/remediations?limit=${limit}&offset=${offset}`,
       ),
     );
-    return res.remediations;
   }
 
   async queryMetrics(clusterId: string, serviceName?: string): Promise<MetricPoint[]> {
