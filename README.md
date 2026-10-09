@@ -6,6 +6,8 @@ A small agent runs inside the tenant's cluster, measures every service every 15 
 
 Only numerical features leave the cluster; the agent is the only component that can change it.
 
+**Contents:** [How it works](#how-it-works) · [Repository layout](#repository-layout) · [Requirements](#requirements) · [Quick start](#quick-start) · [Monitor a real cluster](#monitor-a-real-cluster) · [Model](#model) · [Create a dataset and train a model](#create-a-dataset-and-train-a-model) · [Tests](#tests) · [Limitations](#limitations) · [Reference](#reference)
+
 ## How it works
 
 ```
@@ -34,13 +36,13 @@ The served model is in `HelmAndSaas/Saas/inference/model/v3/`. The datasets and 
 ## Requirements
 
 - **Backend and dashboard:** Node.js (tested with 24) and Docker with the Compose plugin.
-- **A real cluster (optional, see step 3):** `kubectl`, Helm 3 and a Kubernetes cluster whose nodes run the **Docker container runtime**. The chart's cAdvisor is started with `--docker_only=true`, so on a containerd-based cluster (kind, k3s, most managed clusters) it sees no containers and the agent gets no data. Tested with minikube 1.39 (Docker driver) and Sock-Shop.
+- **A real cluster (optional, see [Monitor a real cluster](#monitor-a-real-cluster)):** `kubectl`, Helm 3 and a Kubernetes cluster whose nodes run the **Docker container runtime with the `systemd` cgroup driver** (cgroup v2 in our tests). The agent identifies a pod by the pod UID inside cAdvisor's cgroup path (underscore form, as the `systemd` driver writes it) and reads network counters of the pod's `POD` container, and the chart's cAdvisor is started with `--docker_only=true`. On other setups the agent receives no data: containerd-based clusters (kind, k3s, most managed clusters) and Docker with the `cgroupfs` driver are not supported and were not tested. Tested with minikube 1.39 (Docker driver, Docker runtime) and Sock-Shop.
 - **Monitored applications:** a Prometheus-format `/metrics` page with `request_duration_seconds` (with a `status_code` label) and `process_*` metrics. A service without it is skipped, with one warning in the agent log.
 - **Creating a dataset and training a model (optional):** Python 3.12, see the section below.
 
 ## Quick start
 
-**1. Backend**
+### 1. Start the backend
 
 ```bash
 cd HelmAndSaas/Saas
@@ -51,7 +53,7 @@ npm run migrate                   # applies db/schema.sql
 INFERENCE_MODE=onnx npm start     # http://localhost:8000
 ```
 
-**2. Dashboard**
+### 2. Start the dashboard
 
 ```bash
 cd HelmAndSaas/Dashboard
@@ -61,14 +63,18 @@ npm start                         # http://localhost:4200
 
 Open http://localhost:4200 and register an organization on the sign-in page. The backend address is set in `src/app/core/api-config.ts`.
 
-**Without a cluster:** in the dashboard open *Settings*, generate an API key, then send synthetic samples (a problem appears every third cycle):
+### 3. Try it without a cluster
+
+In the dashboard open *Settings*, generate an API key, then send synthetic samples (a problem appears every third cycle):
 
 ```bash
 cd HelmAndSaas/Saas
 FAKE_AGENT_API_KEY=<key> node scripts/fake-agent.js --loop
 ```
 
-**3. Connect a real cluster**
+## Monitor a real cluster
+
+### Deploy a demo application
 
 Start a cluster with the Docker runtime (for example minikube) and deploy the Sock-Shop demo application with its load generator:
 
@@ -78,11 +84,15 @@ kubectl create -f https://raw.githubusercontent.com/microservices-demo/microserv
 kubectl get pods -n sock-shop      # wait until every pod is Running; the Java services need a few minutes
 ```
 
+### Build the agent image
+
 Build the agent image so that the cluster can pull it (for minikube, run `eval $(minikube docker-env)` first; for another cluster push it to a registry and add `--set agent.image.repository=<registry>/sadmc-agent`):
 
 ```bash
 docker build -t sadmc-agent:1.1.5 HelmAndSaas/Agent
 ```
+
+### Install the agent
 
 The dashboard's *Connect a Cluster* page generates the install command with a new API key. Run it from the repository root. It looks like this:
 
@@ -97,11 +107,24 @@ helm install sadmc-agent ./HelmAndSaas/Helm/charts/sadmc-agent \
 
 The backend address must be reachable from the cluster's pods (use the LAN address of the machine that runs the backend, not `localhost`). The first verdicts appear after about 75 seconds, when the agent has a full minute of readings. Remediation is off by default; enable it with `--set remediation.enabled=true --set 'remediation.services={a,b}'`.
 
+### See a detection
+
 To see a detection, inject a fault with [Pumba](https://github.com/alexei-led/pumba) (with minikube, run `eval $(minikube docker-env)` in that terminal first). The dashboard shows *CPU overload* on `payment` within about a minute:
 
 ```bash
 pumba stress --duration 120s --stress-image alexeiled/stress-ng --stressors "--cpu 1 --cpu-load 100" 're2:k8s_payment_.*_sock-shop_'
 ```
+
+## Model
+
+| Measure | Value |
+|---|---|
+| Input | 33 features per service and 15-second sample (cAdvisor, application `/metrics`, probe, pod state) |
+| Training data | Sock-Shop on minikube: 105 injected faults at five intensities, 10 load spikes |
+| Macro-F1 on held-out events | 0.948 (39 of 42 fault events named, no false alarm on held-out normal periods) |
+| Macro-F1 on a service never seen in training | 0.659 |
+
+The faults are synthetic (Pumba with stress-ng and netem), and all results come from one application on one cluster.
 
 ## Create a dataset and train a model
 
@@ -132,17 +155,6 @@ Step 5 overwrites the model that the backend serves (`HelmAndSaas/Saas/inference
 
 Prerequisites of step 1: minikube with the Docker runtime and Sock-Shop running under a constant load generator, a standalone cAdvisor reachable from the node (`V3_CADVISOR_URL`, default `http://localhost:18080/metrics`), and `kubectl`, `docker` and [Pumba](https://github.com/alexei-led/pumba) on the path. Steps 2 to 5 need only the files from step 1.
 
-## Model
-
-| Measure | Value |
-|---|---|
-| Input | 33 features per service and 15-second sample (cAdvisor, application `/metrics`, probe, pod state) |
-| Training data | Sock-Shop on minikube: 105 injected faults at five intensities, 10 load spikes |
-| Macro-F1 on held-out events | 0.948 (39 of 42 fault events named, no false alarm on held-out normal periods) |
-| Macro-F1 on a service never seen in training | 0.659 |
-
-The faults are synthetic (Pumba with stress-ng and netem), and all results come from one application on one cluster.
-
 ## Tests
 
 ```bash
@@ -151,6 +163,14 @@ python3 HelmAndSaas/Agent/tools/sync_v3_sources.py --check # agent feature code 
 helm lint HelmAndSaas/Helm/charts/sadmc-agent --set sadmc.apiKey=x
 ```
 
+## Limitations
+
+- **Supported clusters:** Docker container runtime with the `systemd` cgroup driver, tested with minikube only (see [Requirements](#requirements)). Containerd-based clusters and Docker with the `cgroupfs` driver give the agent no data.
+- **Evidence:** all results come from one application (Sock-Shop) on one cluster, with synthetic faults. On a service the model has not seen in training the macro-F1 is 0.659.
+- **Applications:** a service without a suitable `/metrics` page is skipped.
+- **Remediation:** a fixed rule table (cap the CPU limit, restart the pod, add a replica) with a cooldown per action; it is not learned. It is off by default.
+- **Agent image:** built locally; push it to a registry to use it on other clusters.
+- **Training data:** the datasets are not in the repository; creating one takes about 15 hours on a minikube cluster.
 
 ## Reference
 
