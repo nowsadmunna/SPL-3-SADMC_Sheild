@@ -1,27 +1,40 @@
-<h1 class="mb-6 text-xl font-semibold text-slate-900 dark:text-slate-100">Remediation Log</h1>
+<h1 class="mb-1 text-xl font-semibold text-slate-900 dark:text-slate-100">Remediation Log</h1>
+<p class="mb-4 text-sm text-slate-500 dark:text-slate-400">
+  What the agent did on its own after a problem was confirmed (three confident detections in a row), and why.
+</p>
 
-<div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
-  <table class="w-full text-left text-sm">
+<div class="overflow-x-auto rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
+  <table class="w-full min-w-[40rem] text-left text-sm">
     <thead class="bg-brand-50 text-xs uppercase text-brand-700 dark:bg-slate-900 dark:text-brand-300">
       <tr>
-        <th class="px-4 py-2">Time</th>
+        <th class="px-4 py-2">When</th>
         <th class="px-4 py-2">Service</th>
-        <th class="px-4 py-2">Action</th>
-        <th class="px-4 py-2">Status</th>
-        <th class="px-4 py-2">Duration</th>
+        <th class="px-4 py-2">Problem</th>
+        <th class="px-4 py-2">What the agent did</th>
+        <th class="px-4 py-2">Reaction</th>
+        <th class="px-4 py-2">Result</th>
       </tr>
     </thead>
     <tbody>
       @for (r of remediations(); track r.id) {
         <tr class="border-t border-slate-100 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-700/50">
-          <td class="px-4 py-2 text-slate-500 dark:text-slate-400">{{ r.executed_at | date: 'short' }}</td>
+          <td class="whitespace-nowrap px-4 py-2 text-slate-500 dark:text-slate-400" [title]="(r.executed_at | date: 'medium') ?? ''">{{ agoDate(r.executed_at) }}</td>
           <td class="px-4 py-2 text-slate-900 dark:text-slate-100">{{ r.service_name }} <span class="text-slate-400 dark:text-slate-500">/ {{ r.namespace }}</span></td>
           <td class="px-4 py-2">
-            <span
-              class="rounded-full px-2 py-0.5 font-mono text-xs"
-              [class]="actionBadgeClass[r.action_type] ?? 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300'"
-              >{{ r.action_type }}</span
-            >
+            @if (r.anomaly_type) {
+              <app-anomaly-badge [type]="r.anomaly_type" />
+            } @else {
+              <span class="text-slate-400">—</span>
+            }
+          </td>
+          <td class="px-4 py-2">
+            <span class="mr-1 rounded-full px-2 py-0.5 font-mono text-[11px]"
+              [class]="actionBadgeClass[r.action_type] ?? 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300'">{{ r.action_type }}</span>
+            <span class="text-xs text-slate-500 dark:text-slate-400">{{ actionText(r.action_type, r.action_params) }}</span>
+          </td>
+          <td class="whitespace-nowrap px-4 py-2 text-slate-500 dark:text-slate-400"
+              title="Time from the first detection of the problem to the action">
+            {{ r.reaction_seconds !== null && r.reaction_seconds !== undefined && r.reaction_seconds >= 1 ? durationText(r.reaction_seconds) + ' after it started' : '—' }}
           </td>
           <td class="px-4 py-2">
             <span
@@ -33,15 +46,23 @@
                     ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300'
                     : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
               "
+              [title]="r.error_message ?? ''"
               >{{ r.status }}</span
             >
           </td>
-          <td class="px-4 py-2 text-slate-500 dark:text-slate-400">{{ r.duration_ms ? r.duration_ms + ' ms' : '—' }}</td>
         </tr>
       } @empty {
         <tr>
-          <td colspan="5" class="px-4 py-6 text-center text-slate-400 dark:text-slate-500">
-            {{ loading() ? 'Loading…' : 'No remediation actions yet.' }}
+          <td colspan="6" class="px-4 py-8 text-center text-slate-400 dark:text-slate-500">
+            @if (loading()) {
+              Loading…
+            } @else {
+              <p>No actions yet.</p>
+              <p class="mt-1 text-xs">
+                The agent only <span class="font-medium">reports</span> problems unless automatic actions were switched on at install time
+                (<code class="rounded bg-brand-50 px-1 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">--set remediation.enabled=true</code>, see "Connect a Cluster").
+              </p>
+            }
           </td>
         </tr>
       }

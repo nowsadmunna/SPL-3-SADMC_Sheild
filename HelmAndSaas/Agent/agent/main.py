@@ -2,12 +2,10 @@ import asyncio
 import logging
 import time
 from datetime import datetime
-from collections import deque
 
 from .config import config
 from .discovery import Discovery
-from .prometheus_detector import detect
-from .metrics_collector import MetricsCollector
+from .v3_collector import V3Collector
 from .inference_client import InferenceClient
 from .remediation.rules import REMEDIATION_RULES
 from .remediation.cooldown import cooldown_tracker
@@ -19,22 +17,21 @@ class SADMCAgent:
     def __init__(self):
         self.discovery = Discovery()
         self.inference_client = InferenceClient()
-        
-        # History for trend calculation: {service_key -> deque of (cpu, mem)}
-        self._history = {}
-        self.max_history = 10
+
+        # service_key -> (last anomaly_type, consecutive count) for the remediation guard
+        self._streak = {}
 
     async def run(self):
-        # 1. Prometheus Detection
-        prom_url = detect(config.PROMETHEUS_MODE, config.PROMETHEUS_URL)
-        self.metrics_collector = MetricsCollector(prom_url)
+        # 1. Collector: 33 features per service from cAdvisor, the apps' /metrics, a probe and the Kubernetes API
+        self.metrics_collector = V3Collector()
+        logger.info("collecting 33 features per service from cAdvisor, app /metrics and a probe")
 
-        # 2. SaaS Registration
+        # 2. SaaS registration
         registered = await self.inference_client.register()
         if not registered:
             logger.warning("Agent registration failed, will retry in metrics loop")
 
-        # 3. Monitoring Loop
+        # 3. Monitoring loop
         while True:
             try:
                 start_time = time.time()
@@ -62,10 +59,6 @@ class SADMCAgent:
         for svc in collected:
             logger.info(f"Metrics for {svc['namespace']}/{svc['service_name']}: {svc['metrics']}")
         
-        # Enrich with trends
-        for svc in collected:
-            self._enrich_trends(svc)
-
         # Step 3: Send to SaaS for Inference
         payload = {
             "timestamp": datetime.utcnow().isoformat(),
@@ -81,30 +74,22 @@ class SADMCAgent:
         if config.REMEDIATION_ENABLED:
             await self._process_anomalies(inference_resp.get("results", []))
 
-    def _enrich_trends(self, svc):
-        name = svc["service_name"]
-        ns = svc["namespace"]
-        key = f"{ns}/{name}"
-        
-        metrics = svc["metrics"]
-        current_cpu = metrics["cpu_usage_percent"]
-        current_mem = metrics["memory_usage_mb"]
-        
-        if key not in self._history:
-            self._history[key] = deque(maxlen=self.max_history)
-        
-        history = self._history[key]
-        
-        if len(history) == self.max_history:
-            prev_cpu, prev_mem = history[0]
-            metrics["cpu_trend"] = current_cpu - prev_cpu
-            metrics["memory_trend"] = current_mem - prev_mem
-        
-        history.append((current_cpu, current_mem))
+    def _confirmed(self, result):
+        """True once the same confident verdict has been seen REMEDIATION_CONSECUTIVE cycles in a row."""
+        key = f"{result['namespace']}/{result['service_name']}"
+        confident = result.get("is_anomaly") and result.get("confidence", 0) >= config.CONFIDENCE_THRESHOLD
+        last_type, count = self._streak.get(key, (None, 0))
+        if not confident:
+            self._streak[key] = (None, 0)
+            return False
+        count = count + 1 if last_type == result["anomaly_type"] else 1
+        self._streak[key] = (result["anomaly_type"], count)
+        return count >= config.REMEDIATION_CONSECUTIVE
 
     async def _process_anomalies(self, results):
         for result in results:
-            if result.get("is_anomaly") and result.get("confidence", 0) >= config.CONFIDENCE_THRESHOLD:
+            confirmed = self._confirmed(result)
+            if confirmed and (not config.REMEDIATION_SERVICES or result["service_name"] in config.REMEDIATION_SERVICES):
                 anomaly_type = result["anomaly_type"]
                 service_name = result["service_name"]
                 namespace = result["namespace"]

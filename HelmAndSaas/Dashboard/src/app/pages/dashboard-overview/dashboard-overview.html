@@ -1,22 +1,92 @@
-<h1 class="mb-6 text-xl font-semibold text-slate-900 dark:text-slate-100">Service Health</h1>
+<div class="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+  <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100">Service Health</h1>
+  @if (hasClusters() && cards().length > 0) {
+    <span class="text-xs text-slate-400 dark:text-slate-500">Refreshes every 10 s</span>
+  }
+</div>
 
-@if (loading()) {
+@if (!hasClusters()) {
+  <!-- nothing connected yet -->
+  <div class="rounded-xl border border-dashed border-brand-300 bg-white p-8 text-center dark:border-slate-600 dark:bg-slate-800">
+    <h2 class="mb-1 text-lg font-semibold text-slate-900 dark:text-slate-100">Connect your first cluster</h2>
+    <p class="mx-auto mb-4 max-w-md text-sm text-slate-500 dark:text-slate-400">
+      Install the agent with one Helm command. Within a couple of minutes your services appear here with their health.
+    </p>
+    <ol class="mx-auto mb-5 max-w-sm list-inside list-decimal space-y-1 text-left text-sm text-slate-600 dark:text-slate-300">
+      <li>Create an API key</li>
+      <li>Pick the services to monitor</li>
+      <li>Run the printed <code class="rounded bg-brand-50 px-1 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">helm install</code> command</li>
+    </ol>
+    <a routerLink="/dashboard/setup" class="inline-block rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand-700">Connect a cluster</a>
+  </div>
+} @else if (loading() && cards().length === 0) {
   <p class="text-sm text-slate-400 dark:text-slate-500">Loading…</p>
-} @else if (serviceHealth().length === 0) {
-  <p class="text-sm text-slate-400 dark:text-slate-500">No services discovered yet for this cluster.</p>
+} @else if (cards().length === 0) {
+  <p class="text-sm text-slate-500 dark:text-slate-400">
+    No services reported yet for this cluster. If you just installed the agent, give it about two minutes
+    (it needs a minute of readings first), or check <a routerLink="/dashboard/setup" class="underline text-brand-700 dark:text-brand-300">the install steps</a>.
+  </p>
 } @else {
-  <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-    @for (svc of serviceHealth(); track svc.service_name) {
-      <div
-        class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md border-l-4 dark:border-slate-700 dark:bg-slate-800"
-        [class]="borderClass[svc.status]"
+  <!-- one-line summary: the answer to "is everything fine?" -->
+  @if (silent().length === cards().length) {
+    <div class="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200" role="status">
+      <span class="font-medium">No data from this cluster</span>: the last reading arrived {{ agoText(newestAge()) }}. The agent may be offline.
+      Check it with <code class="rounded bg-white/70 px-1 dark:bg-slate-800">kubectl get pods -n sadmc</code>.
+    </div>
+  } @else if (problems().length > 0) {
+    <div class="mb-4 rounded-lg border border-rose-300 bg-rose-50 p-3 text-sm text-rose-900 dark:border-rose-800 dark:bg-rose-900/30 dark:text-rose-200" role="alert">
+      <p class="font-medium">{{ problems().length }} {{ problems().length === 1 ? 'service has' : 'services have' }} a problem</p>
+      <ul class="mt-1 space-y-1">
+        @for (p of problems(); track p.service_name) {
+          <li>
+            <span class="font-medium">{{ p.service_name }}</span>: {{ info[p.status === 'NO_DATA' ? 'NORMAL' : p.status].label }}.
+            <span class="text-rose-800/80 dark:text-rose-300/80">{{ info[p.status === 'NO_DATA' ? 'NORMAL' : p.status].hint }}</span>
+          </li>
+        }
+      </ul>
+    </div>
+  } @else if (silent().length > 0) {
+    <div class="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200" role="status">
+      <span class="font-medium">{{ silent().length }} of {{ cards().length }} services sent no data</span> in the last minute; the others look healthy.
+    </div>
+  } @else {
+    <div class="mb-4 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200" role="status">
+      <span class="font-medium">All {{ cards().length }} services look healthy.</span>
+    </div>
+  }
+
+  <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    @for (c of cards(); track c.service_name) {
+      <a
+        [routerLink]="['/dashboard/metrics']"
+        [queryParams]="{ service: c.service_name }"
+        class="block rounded-lg border border-l-4 border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md dark:border-slate-700 dark:bg-slate-800"
+        [class]="borderClass[c.status]"
+        [title]="'Open the metrics of ' + c.service_name"
       >
-        <div class="mb-2 flex items-center justify-between">
-          <span class="font-medium text-slate-900 dark:text-slate-100">{{ svc.service_name }}</span>
-          <app-anomaly-badge [type]="svc.status" />
+        <div class="mb-1 flex items-center justify-between gap-2">
+          <span class="truncate font-medium text-slate-900 dark:text-slate-100">{{ c.service_name }}</span>
+          <app-anomaly-badge [type]="c.status" />
         </div>
-        <p class="text-xs text-slate-400 dark:text-slate-500">{{ svc.namespace }}</p>
-      </div>
+        <p class="mb-3 text-xs text-slate-400 dark:text-slate-500">{{ c.namespace }}</p>
+
+        @if (c.data?.latest; as m) {
+          <dl class="grid grid-cols-4 gap-2 text-center" [class.opacity-50]="c.status === 'NO_DATA'">
+            <div><dt class="text-[10px] uppercase tracking-wide text-slate-400">CPU</dt><dd class="text-sm font-medium text-slate-800 dark:text-slate-100">{{ fmt(m.cpu_usage_percent) }}%</dd></div>
+            <div><dt class="text-[10px] uppercase tracking-wide text-slate-400">Memory</dt><dd class="text-sm font-medium text-slate-800 dark:text-slate-100">{{ fmt(m.memory_usage_mb, 0) }} MB</dd></div>
+            <div><dt class="text-[10px] uppercase tracking-wide text-slate-400">Latency</dt><dd class="text-sm font-medium text-slate-800 dark:text-slate-100">{{ latencyText(m.network_latency_ms) }}</dd></div>
+            <div><dt class="text-[10px] uppercase tracking-wide text-slate-400">Req/s</dt><dd class="text-sm font-medium text-slate-800 dark:text-slate-100">{{ fmt(m.request_rate, 0) }}</dd></div>
+          </dl>
+          <div class="mt-2 text-brand-500 dark:text-brand-300" [class.opacity-40]="c.status === 'NO_DATA'">
+            <app-sparkline [values]="c.data?.spark?.cpu" [times]="c.data?.spark?.times" unit="%" [minSpan]="2" />
+          </div>
+          <p class="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+            CPU % · last 15 min · updated {{ agoText(c.data?.age_seconds) }}
+          </p>
+        } @else {
+          <p class="text-xs text-slate-400 dark:text-slate-500">No readings yet.</p>
+        }
+      </a>
     }
   </div>
 }

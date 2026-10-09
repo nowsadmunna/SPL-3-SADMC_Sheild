@@ -33,7 +33,7 @@ metricsRouter.post(
       const serviceId = await upsertService(cluster.id, service_name, namespace);
       await insertMetricsRow(cluster.id, service_name, namespace, metrics, feature_vector);
 
-      const inference = await predict(feature_vector);
+      const inference = await predict(feature_vector, req.body?.feature_set);
 
       let eventId = null;
       if (inference.is_anomaly) {

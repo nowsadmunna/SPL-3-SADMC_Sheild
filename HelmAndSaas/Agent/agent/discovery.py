@@ -21,7 +21,13 @@ class Discovery:
             ns = dep.metadata.namespace
             if ns in config.EXCLUDE_NAMESPACES:
                 continue
-                
+            if config.INCLUDE_NAMESPACES and ns not in config.INCLUDE_NAMESPACES:
+                continue
+            if config.INCLUDE_SERVICES and dep.metadata.name not in config.INCLUDE_SERVICES:
+                continue
+            if dep.metadata.name in config.EXCLUDE_SERVICES:
+                continue
+
             services.append({
                 "name": dep.metadata.name,
                 "namespace": ns,

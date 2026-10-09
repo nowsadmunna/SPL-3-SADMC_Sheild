@@ -42,8 +42,8 @@
   </div>
 }
 
-<div class="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
-  <table class="w-full text-left text-sm">
+<div class="overflow-x-auto rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
+  <table class="w-full min-w-[32rem] text-left text-sm">
     <thead class="bg-brand-50 text-xs uppercase text-brand-700 dark:bg-slate-900 dark:text-brand-300">
       <tr>
         <th class="px-4 py-2">Name</th>
@@ -66,11 +66,13 @@
               {{ key.is_active ? 'active' : 'revoked' }}
             </span>
           </td>
-          <td class="px-4 py-2 text-slate-500 dark:text-slate-400">{{ key.last_used_at || 'never' }}</td>
+          <td class="px-4 py-2 text-slate-500 dark:text-slate-400" [title]="key.last_used_at ?? ''">{{ key.last_used_at ? agoDate(key.last_used_at) : 'never used' }}</td>
           <td class="px-4 py-2 text-right">
             @if (key.is_active) {
-              <button (click)="revoke(key.id)" class="text-xs font-medium text-rose-600 hover:underline dark:text-rose-400">
-                Revoke
+              <button (click)="revoke(key.id)"
+                [class]="confirmRevoke() === key.id ? 'rounded-md bg-rose-600 px-2 py-1 text-xs font-medium text-white hover:bg-rose-700' : 'text-xs font-medium text-rose-600 hover:underline dark:text-rose-400'"
+                [title]="confirmRevoke() === key.id ? 'Agents using this key stop reporting within about 5 minutes' : ''">
+                {{ confirmRevoke() === key.id ? 'Click again to revoke' : 'Revoke' }}
               </button>
             }
           </td>

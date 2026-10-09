@@ -22,6 +22,43 @@ dashboardRouter.get(
   })
 );
 
+dashboardRouter.patch(
+  "/clusters/:id",
+  requireOwnedCluster,
+  asyncRoute(async (req, res) => {
+    const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+    if (!name || name.length > 100) {
+      return res.status(400).json({ error: "name must be 1-100 characters" });
+    }
+    try {
+      res.json({ cluster: await dashboardService.renameCluster(req.tenantId, req.params.id, name) });
+    } catch (err) {
+      if (err.status === 409) return res.status(409).json({ error: err.message });
+      throw err;
+    }
+  })
+);
+
+dashboardRouter.get(
+  "/clusters/:id/overview",
+  requireOwnedCluster,
+  asyncRoute(async (req, res) => {
+    res.json({ services: await dashboardService.overview(req.tenantId, req.params.id) });
+  })
+);
+
+dashboardRouter.get(
+  "/clusters/:id/incidents",
+  requireOwnedCluster,
+  asyncRoute(async (req, res) => {
+    const limit = Math.min(Math.max(parseInt(req.query.limit || "50", 10) || 50, 1), 200);
+    const offset = Math.max(parseInt(req.query.offset || "0", 10) || 0, 0);
+    res.json(await dashboardService.listIncidents(req.tenantId, req.params.id, {
+      limit, offset, service: req.query.service || null, type: req.query.type || null,
+    }));
+  })
+);
+
 dashboardRouter.get(
   "/clusters/:id/services",
   asyncRoute(requireOwnedCluster),

@@ -1,118 +1,77 @@
 """
-Generates fixture feature vectors and runs them through the real PyTorch
-model, dumping {input, logits, probs, pred_class} to fixtures/torch_reference.json.
-verify_parity.js then runs the same vectors through the exported ONNX model
-and asserts the two agree — the mandatory gate before flipping
-INFERENCE_MODE=onnx in the Node backend.
+Writes fixtures/torch_reference_v3.json for verify_parity.js, the gate before INFERENCE_MODE=onnx.
 
-Run with: SADMC-MT-FF-FL/sadmc-venv/bin/python HelmAndSaas/Saas/inference/verify_parity.py
+It checks the WHOLE serving path, not just the ONNX file:
+  raw 33-vector --(fixed global MinMax scaler, model/v3/global_scaler.json)--> normalised --> model --> probs
+verify_parity.js redoes the normalisation in JS (fixedScaler.js) and must land on the same numbers, then runs ONNX and must
+reproduce torch's probabilities. An ONNX model that agrees perfectly with torch but is fed the wrong scaling is worthless,
+hence the real-row accuracy printed at the end (this is a plumbing check, not a generalisation score).
+
+Run: SADMC-MT-FF-FL/sadmc-venv/bin/python HelmAndSaas/Saas/inference/verify_parity.py
 """
+import csv
 import json
 import os
 import random
 import sys
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-sys.path.append(os.path.join(PROJECT_ROOT, "SADMC-MT-FF-FL", "code"))
-sys.path.insert(0, PROJECT_ROOT)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import numpy as np  # noqa: E402
 import torch  # noqa: E402
-from local_pipeline_test import load_global_model  # noqa: E402
 
-FIXTURES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "torch_reference.json")
+from model_loader import PROJECT_ROOT, load_global_model  # noqa: E402
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+NUM_FEATURES = 33
+FIXTURES_PATH = os.path.join(HERE, "fixtures", "torch_reference_v3.json")
+MODEL_PTH = os.getenv("MODEL_PTH") or os.path.join(PROJECT_ROOT, "SADMC-MT-FF-FL", "saved_models", "ssh_bs-support_v3_globalscale", "pooled_last", "sadmc_global_model_own.pth")
+SCALER = json.load(open(os.path.join(HERE, "model", "v3", "global_scaler.json")))
+BUILT = os.path.join(PROJECT_ROOT, "SADMC-MT-FF-FL", "own_dataset", "datasets", "ssh_bs-support_v3", "built")   # derived (unscaled) features + labels
+SERVICES = ["carts", "front-end", "user", "shipping"]
 
 
-def build_fixtures():
-    random.seed(1407)
-    fixtures = []
+def load_rows(svc):
+    feats = json.load(open(os.path.join(BUILT, "split.json")))["features"]
+    with open(os.path.join(BUILT, f"{svc}.csv")) as f:
+        rows = [r for r in csv.DictReader(f) if r["transition"] == "0"]
+    return (np.array([[float(r[k]) for k in feats] for r in rows]), np.array([int(r["label"]) for r in rows]))
 
-    # All-zero edge case.
-    fixtures.append([0.0] * 35)
 
-    # All-ones (small, uniform) edge case.
-    fixtures.append([1.0] * 35)
-
-    # A handful of "plausible normal load" vectors: modest CPU/mem/latency.
-    for _ in range(5):
-        vec = [
-            random.uniform(0, 30),   # cpu_user
-            random.uniform(0, 20),   # cpu_system
-            random.uniform(0, 40),   # cpu_total
-            random.uniform(0, 1),    # cpu_throttled
-            random.uniform(0, 5),    # cpu_cfs_periods
-            random.uniform(50, 300),  # mem_rss
-            random.uniform(10, 100),  # mem_cache
-            random.uniform(0, 5),    # mem_swap
-            random.uniform(0, 2),    # mem_failcnt
-            random.uniform(100, 400),  # mem_usage
-        ] + [random.uniform(0, 50) for _ in range(25)]
-        fixtures.append(vec)
-
-    # A handful of "CPU-spike-shaped" vectors: CPU-related indices (0-4)
-    # pushed high, everything else modest.
-    for _ in range(5):
-        vec = [
-            random.uniform(80, 100),  # cpu_user
-            random.uniform(70, 100),  # cpu_system
-            random.uniform(90, 100),  # cpu_total
-            random.uniform(10, 40),   # cpu_throttled
-            random.uniform(20, 60),   # cpu_cfs_periods
-        ] + [random.uniform(0, 50) for _ in range(30)]
-        fixtures.append(vec)
-
-    # A handful of "memory-leak-shaped" vectors: memory indices (5-9) high.
-    for _ in range(5):
-        vec = (
-            [random.uniform(0, 30) for _ in range(5)]
-            + [
-                random.uniform(2000, 8000),  # mem_rss
-                random.uniform(500, 2000),  # mem_cache
-                random.uniform(100, 500),   # mem_swap
-                random.uniform(50, 200),    # mem_failcnt
-                random.uniform(3000, 9000),  # mem_usage
-            ]
-            + [random.uniform(0, 50) for _ in range(25)]
-        )
-        fixtures.append(vec)
-
-    # A couple of large/extreme values to probe numerical stability.
-    fixtures.append([1e4] * 35)
-    fixtures.append([-1.0] * 35)  # negative values shouldn't occur in practice, but guard anyway
-
-    return fixtures
+def scale_fixed(vec):
+    z = np.asarray(vec, dtype=np.float64) * np.array(SCALER["scale"]) + np.array(SCALER["min"])
+    z = np.clip(z, 0.0, 1.0)
+    z[np.array(SCALER["constant"], dtype=bool)] = 0.0
+    return z
 
 
 def main():
-    model = load_global_model()
+    random.seed(1407)
+    model = load_global_model(model_path=MODEL_PTH, num_features=NUM_FEATURES)
     model.eval()
-
-    fixtures = build_fixtures()
-    records = []
-
-    for raw_vector in fixtures:
-        padded = list(raw_vector) + [0.0] * (36 - len(raw_vector))
-        x = torch.tensor(padded, dtype=torch.float32).reshape(1, 1, -1)
-        x = torch.nan_to_num(x)
-
-        with torch.no_grad():
-            logits = torch.nan_to_num(model(x))
-            probs = torch.softmax(logits, dim=1)
-            pred_class = int(torch.argmax(probs, dim=1).item())
-
-        records.append(
-            {
-                "input": raw_vector,
-                "logits": logits[0].tolist(),
-                "probs": probs[0].tolist(),
-                "pred_class": pred_class,
-            }
-        )
-
+    fixtures, hit, real = [], 0, 0
+    for svc in SERVICES:
+        X, y = load_rows(svc)
+        picks = [([0.0] * NUM_FEATURES, None), ([1e9] * NUM_FEATURES, None), ([-5.0] * NUM_FEATURES, None)] if svc == SERVICES[0] else []
+        for cls in range(4):   # real rows: 6 per class
+            idx = [i for i in range(len(y)) if y[i] == cls]
+            picks += [(X[i].tolist(), cls) for i in random.sample(idx, 6)]
+        for raw, true_cls in picks:
+            norm = scale_fixed(raw)
+            with torch.no_grad():
+                logits = model(torch.tensor(norm, dtype=torch.float32).reshape(1, 1, -1))
+            probs = torch.softmax(logits, dim=1)[0]
+            pred = int(torch.argmax(probs))
+            fixtures.append({"service": svc, "input": raw, "normalised": norm.tolist(),
+                             "true_class": true_cls, "probs": probs.tolist(), "pred_class": pred})
+            if true_cls is not None:
+                real += 1
+                hit += int(pred == true_cls)
     os.makedirs(os.path.dirname(FIXTURES_PATH), exist_ok=True)
     with open(FIXTURES_PATH, "w") as f:
-        json.dump(records, f, indent=2)
-
-    print(f"[verify_parity.py] wrote {len(records)} fixtures to {FIXTURES_PATH}")
+        json.dump({"fixtures": fixtures}, f)
+    print(f"[parity] wrote {len(fixtures)} fixtures")
+    print(f"[parity] sanity: torch gets {hit}/{real} REAL rows right ({100 * hit / real:.0f}%)")
 
 
 if __name__ == "__main__":

@@ -12,12 +12,23 @@ metadata:
     {{- include "sadmc-agent.labels" . | nindent 4 }}
 data:
   SAAS_ENDPOINT: {{ .Values.sadmc.saasEndpoint | quote }}
-  # Helm lookup resolves these at install/upgrade time against the live cluster
-  PROMETHEUS_MODE: {{ include "sadmc-agent.prometheus.effectiveMode" . | trim | quote }}
-  PROMETHEUS_URL: {{ include "sadmc-agent.prometheus.effectiveUrl"   . | trim | quote }}
-  # Fallback URL for the Prometheus the chart auto-installs (used when mode=install)
-  INSTALLED_PROMETHEUS_URL: {{ printf "http://%s-prometheus.%s.svc.cluster.local:9090" (include "sadmc-agent.fullname" .) .Release.Namespace | quote }}
   EXCLUDE_NAMESPACES: {{ join "," $excludeList | quote }}
+  SADMC_CLUSTER_NAME: {{ .Values.sadmc.clusterName | quote }}
+  INCLUDE_SERVICES: {{ join "," (.Values.discovery.includeServices | default list) | quote }}
+  INCLUDE_NAMESPACES: {{ join "," (.Values.discovery.namespaces | default list) | quote }}
+  EXCLUDE_SERVICES: {{ join "," (.Values.discovery.excludeServices | default list) | quote }}
+  REMEDIATION_SERVICES: {{ join "," (.Values.remediation.services | default list) | quote }}
+  REMEDIATION_CONSECUTIVE: {{ .Values.remediation.consecutive | default 3 | quote }}
+  {{- $cid := .Values.sadmc.clusterId }}
+  {{- $kubeNs := lookup "v1" "Namespace" "" "kube-system" }}
+  {{- if and (not $cid) $kubeNs }}{{- $cid = $kubeNs.metadata.uid }}{{- end }}
+  SADMC_CLUSTER_ID: {{ $cid | quote }}
+  {{- if and .Values.cadvisor.enabled (not .Values.cadvisor.externalUrls) }}
+  V3_CADVISOR_SERVICE: {{ printf "%s/%s-cadvisor" .Release.Namespace (include "sadmc-agent.fullname" .) | quote }}
+  {{- end }}
+  {{- if .Values.cadvisor.externalUrls }}
+  V3_CADVISOR_URLS: {{ join "," .Values.cadvisor.externalUrls | quote }}
+  {{- end }}
   REMEDIATION_ENABLED: {{ .Values.remediation.enabled | quote }}
   CONFIDENCE_THRESHOLD: {{ .Values.remediation.confidenceThreshold | quote }}
   REMEDIATION_RULES: {{ .Values.remediation.rules | toJson | quote }}

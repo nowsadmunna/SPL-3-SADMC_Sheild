@@ -1,20 +1,55 @@
-<div class="mb-6 flex items-center justify-between">
+<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
   <h1 class="text-xl font-semibold text-slate-900 dark:text-slate-100">Metrics</h1>
 
   @if (services().length > 0) {
-    <select
-      class="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
-      [value]="selectedService()"
-      (change)="onServiceChange($event)"
-    >
-      @for (svc of services(); track svc.service_name) {
-        <option [value]="svc.service_name">{{ svc.service_name }}</option>
-      }
-    </select>
+    <div class="flex flex-wrap items-center gap-2">
+      <div class="inline-flex overflow-hidden rounded-md border border-slate-300 text-sm dark:border-slate-600" role="group" aria-label="Time range">
+        @for (r of ranges; track r.minutes) {
+          <button type="button" (click)="setRange(r.minutes)"
+            [class]="rangeMinutes() === r.minutes ? 'bg-brand-600 px-2.5 py-1 text-white' : 'bg-white px-2.5 py-1 text-slate-600 hover:bg-slate-100 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600'">{{ r.label }}</button>
+        }
+      </div>
+      <button type="button" (click)="toggleLive()" [attr.aria-pressed]="live()" title="Refresh every 10 s"
+        class="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-sm text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600">
+        <span class="inline-block h-2 w-2 rounded-full" [class]="live() ? 'bg-emerald-500' : 'bg-slate-400'"></span>{{ live() ? 'Live' : 'Paused' }}
+      </button>
+      <select
+        class="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
+        [value]="selectedService()"
+        (change)="onServiceChange($event)"
+        aria-label="Service"
+      >
+        @for (svc of services(); track svc.service_name) {
+          <option [value]="svc.service_name" [selected]="svc.service_name === selectedService()">{{ svc.service_name }}</option>
+        }
+      </select>
+    </div>
   }
 </div>
 
-@if (loading()) {
+@if (services().length > 0 && selectedService()) {
+  <div class="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border px-3 py-2 text-sm"
+    [class]="current() ? 'border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-100' : 'border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200'">
+    <span class="font-medium">{{ selectedService() }}</span>
+    @if (current(); as c) {
+      <span class="font-medium">{{ c.label }}</span><span>{{ c.hint }}</span>
+    } @else {
+      <span class="text-emerald-700 dark:text-emerald-300">Healthy: no problem in the last 90 s</span>
+    }
+    @if (freshness(); as f) { <span class="ml-auto text-xs opacity-70">latest sample {{ f }}</span> }
+  </div>
+}
+
+@if (legend().length > 0) {
+  <p class="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+    <span>Shaded = a problem the detector reported:</span>
+    @for (t of legend(); track t) {
+      <span class="inline-flex items-center gap-1"><span class="inline-block h-3 w-3 rounded-sm" [style.background]="bandColor[t]"></span>{{ info[t].label }}</span>
+    }
+  </p>
+}
+
+@if (loading() && services().length === 0) {
   <p class="text-sm text-slate-400 dark:text-slate-500">Loading…</p>
 } @else if (services().length === 0) {
   <p class="text-sm text-slate-400 dark:text-slate-500">No services discovered yet for this cluster.</p>
@@ -22,10 +57,11 @@
   <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
     @for (panel of panels; track panel.key) {
       <div class="rounded-lg border border-t-4 border-slate-200 border-t-brand-500 bg-white p-4 shadow-sm dark:border-slate-700 dark:border-t-brand-400 dark:bg-slate-800">
-        <p class="mb-2 text-sm font-medium text-slate-700 dark:text-slate-300">{{ panel.title }}</p>
-        <div class="h-56">
+        <p class="text-sm font-medium text-slate-700 dark:text-slate-300">{{ panel.title }}</p>
+        <p class="mb-2 text-xs text-slate-400 dark:text-slate-500">{{ panel.hint }}</p>
+        <div class="h-52">
           @if (chartData()[panel.key]; as data) {
-            <canvas baseChart [type]="'line'" [data]="data" [options]="chartOptions()"></canvas>
+            <canvas baseChart [type]="'line'" [data]="data" [options]="chartOptions()" [plugins]="plugins"></canvas>
           }
         </div>
       </div>

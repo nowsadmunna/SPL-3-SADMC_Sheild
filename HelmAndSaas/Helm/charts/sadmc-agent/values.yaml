@@ -4,30 +4,30 @@
 sadmc:
   apiKey: ""                          # Paste your API Key from the dashboard
   saasEndpoint: "https://api.sadmc.io"
+  # Name shown in the dashboard (e.g. "prod-eu"). Empty = the name of the API key; it can be renamed in the dashboard later.
+  clusterName: ""
+  # Stable identity of this cluster in the dashboard. Empty = the UID of the kube-system namespace (read at install time),
+  # so reinstalling or restarting the agent never creates a second cluster.
+  clusterId: ""
 
 # ─── AGENT DOCKER IMAGE ─────────────────────────────────────────
 agent:
   image:
-    repository: "yourusername/sadmc-agent"
-    tag: "1.0.0"
+    repository: "sadmc-agent"        # build: docker build -t sadmc-agent:1.1.5 HelmAndSaas/Agent  (publish it to a registry for other clusters)
+    tag: "1.1.5"
     pullPolicy: IfNotPresent
   resources:
     requests: { cpu: "100m", memory: "128Mi" }
     limits:   { cpu: "500m", memory: "512Mi" }
 
-# ─── PROMETHEUS ─────────────────────────────────────────────────
-prometheus:
-  # auto     = Helm queries the live cluster at install time.
-  #            If an existing Prometheus is found → connect to it.
-  #            If NOT found     → Helm installs a minimal Prometheus automatically.
-  # existing = Skip detection. Point to your own Prometheus via existingUrl.
-  # install  = Always install a fresh Prometheus regardless of what's in the cluster.
-  mode: "auto"
-  existingUrl: ""    # Only used when mode=existing. e.g. http://prometheus-server.monitoring:9090
-  install:
-    storageSize: "10Gi"
-    storageClass: "" # Leave empty to use cluster default StorageClass
-    retention: "15d"
+# ─── cAdvisor ────────────────────────────────────────────────────
+# Container metrics per pod: CPU user/system, network, memory, throttling. The kubelet's built-in cAdvisor on many clusters does
+# not export all of these. This DaemonSet runs a standalone cAdvisor on every node and is PRIVILEGED (it mounts the node's / and
+# /sys read-only); set enabled=false if you do not allow that and point the agent at your own with cadvisor.externalUrls.
+cadvisor:
+  enabled: true
+  image: "gcr.io/cadvisor/cadvisor:v0.49.1"
+  externalUrls: []     # e.g. ["http://10.0.0.5:8080/metrics"]; used instead of the DaemonSet when set
 
 # ─── SERVICE DISCOVERY ──────────────────────────────────────────
 discovery:
@@ -35,11 +35,21 @@ discovery:
     - "kube-system"
     - "kube-public"
     - "sadmc"
+  # Score only these deployments (by name). Empty = every deployment outside excludeNamespaces. The models are trained on
+  # application services, so databases / queues / monitoring are better left out.
+  includeServices: []
+  # Monitor only these namespaces (empty = every namespace outside excludeNamespaces, which always wins). Combine with
+  # includeServices / excludeServices to narrow further inside them.
+  namespaces: []
+  # Deployment names to leave out, e.g. a database in a monitored namespace.
+  excludeServices: []
 
 # ─── REMEDIATION ─────────────────────────────────────────────────
 remediation:
-  enabled: true
+  enabled: false          # observe first; --set remediation.enabled=true to let the agent act
   confidenceThreshold: 0.85
+  consecutive: 3          # act only after this many consecutive confident verdicts for the same service
+  services: []            # allow-list of deployments the agent may act on (empty = all discovered)
   rules:
     CPU_HOG:
       action: "THROTTLE_CPU"

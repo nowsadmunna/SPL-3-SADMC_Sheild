@@ -1,5 +1,4 @@
-// Mirrors ANOMALY_CLASSES in local_pipeline_test.py — must stay in sync
-// with the class-index ordering the model was trained/exported with.
+// Class-index order the model was trained and exported with.
 export const ANOMALY_CLASSES = {
   0: "NORMAL",
   1: "CPU_HOG",
@@ -7,8 +6,10 @@ export const ANOMALY_CLASSES = {
   3: "NETWORK_DELAY",
 };
 
-export const FEATURE_VECTOR_LENGTH = 35; // as sent by the agent (metrics_collector.py)
-export const MODEL_INPUT_LENGTH = 36; // padded length the MLSTM model expects (ni=36)
+import { ACTIVE } from "./featureSets.js";
+
+export const FEATURE_VECTOR_LENGTH = ACTIVE.length; // as sent by the agent (see featureSets.js)
+export const MODEL_INPUT_LENGTH = ACTIVE.length; // the model takes the vector as-is (no padding)
 
 // Mirrors HelmAndSaas/Agent/agent/remediation/rules.py DEFAULT_RULES.
 // The backend never decides remediation (the agent does) — this table

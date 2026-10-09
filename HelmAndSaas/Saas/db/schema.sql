@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS clusters (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id       UUID REFERENCES tenants(id) ON DELETE CASCADE,
     cluster_uuid    VARCHAR(100) UNIQUE NOT NULL,
+    name            VARCHAR(100),            -- human-readable; from helm sadmc.clusterName, else the API key's name, editable in the dashboard
     k8s_version     VARCHAR(20),
     node_count      INTEGER,
     agent_version   VARCHAR(20),
@@ -54,7 +55,10 @@ CREATE TABLE IF NOT EXISTS clusters (
     last_heartbeat  TIMESTAMPTZ,
     created_at      TIMESTAMPTZ  DEFAULT NOW()
 );
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS name VARCHAR(100);   -- for databases created before the column existed
 CREATE INDEX IF NOT EXISTS idx_clusters_tenant ON clusters(tenant_id);
+-- a tenant cannot have two clusters with the same name (case-insensitive); clusters without a name are not constrained
+CREATE UNIQUE INDEX IF NOT EXISTS uq_clusters_tenant_name ON clusters (tenant_id, lower(name)) WHERE name IS NOT NULL;
 
 -- ── SERVICES (dynamically updated each discovery cycle) ────────
 CREATE TABLE IF NOT EXISTS services (

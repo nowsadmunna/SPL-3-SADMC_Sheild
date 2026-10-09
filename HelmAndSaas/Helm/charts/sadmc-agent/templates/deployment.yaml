@@ -14,12 +14,19 @@ spec:
     metadata:
       labels:
         {{- include "sadmc-agent.selectorLabels" . | nindent 8 }}
+      annotations:
+        # a changed ConfigMap / Secret (helm upgrade) must restart the agent: env vars are read once at start
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
     spec:
       serviceAccountName: {{ include "sadmc-agent.fullname" . }}
       containers:
         - name: sadmc-agent
           image: "{{ .Values.agent.image.repository }}:{{ .Values.agent.image.tag }}"
           imagePullPolicy: {{ .Values.agent.image.pullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "sadmc-agent.fullname" . }}-config
           env:
             - name: SADMC_API_KEY
               valueFrom:
@@ -31,21 +38,6 @@ spec:
                 configMapKeyRef:
                   name: {{ include "sadmc-agent.fullname" . }}-config
                   key: SAAS_ENDPOINT
-            - name: PROMETHEUS_MODE
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "sadmc-agent.fullname" . }}-config
-                  key: PROMETHEUS_MODE
-            - name: PROMETHEUS_URL
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "sadmc-agent.fullname" . }}-config
-                  key: PROMETHEUS_URL
-            - name: INSTALLED_PROMETHEUS_URL
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "sadmc-agent.fullname" . }}-config
-                  key: INSTALLED_PROMETHEUS_URL
             - name: EXCLUDE_NAMESPACES
               valueFrom:
                 configMapKeyRef:

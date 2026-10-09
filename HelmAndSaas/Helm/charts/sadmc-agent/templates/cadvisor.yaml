@@ -1,0 +1,70 @@
+{{- if and .Values.cadvisor.enabled (not .Values.cadvisor.externalUrls) }}
+# Standalone cAdvisor on every node (read by the agent). PRIVILEGED: it needs the node's cgroups and docker data.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "sadmc-agent.fullname" . }}-cadvisor
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sadmc-agent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: cadvisor
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: cadvisor
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: cadvisor
+    spec:
+      hostPID: true
+      automountServiceAccountToken: false
+      containers:
+        - name: cadvisor
+          image: {{ .Values.cadvisor.image | quote }}
+          args:
+            - --housekeeping_interval=5s
+            - --docker_only=true
+            - --store_container_labels=false
+            - --whitelisted_container_labels=io.kubernetes.pod.name,io.kubernetes.pod.namespace,io.kubernetes.container.name
+          ports:
+            - name: metrics
+              containerPort: 8080
+          securityContext:
+            privileged: true
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits:   { cpu: "500m", memory: "512Mi" }
+          volumeMounts:
+            - { name: rootfs, mountPath: /rootfs, readOnly: true }
+            - { name: run, mountPath: /var/run, readOnly: true }
+            - { name: sys, mountPath: /sys, readOnly: true }
+            - { name: docker, mountPath: /var/lib/docker, readOnly: true }
+            - { name: disk, mountPath: /dev/disk, readOnly: true }
+      volumes:
+        - { name: rootfs, hostPath: { path: / } }
+        - { name: run, hostPath: { path: /var/run } }
+        - { name: sys, hostPath: { path: /sys } }
+        - { name: docker, hostPath: { path: /var/lib/docker } }
+        - { name: disk, hostPath: { path: /dev/disk } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "sadmc-agent.fullname" . }}-cadvisor
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sadmc-agent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: cadvisor
+spec:
+  clusterIP: None            # headless: the agent reads the endpoints (one pod per node)
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: cadvisor
+  ports:
+    - name: metrics
+      port: 8080
+      targetPort: metrics
+{{- end }}

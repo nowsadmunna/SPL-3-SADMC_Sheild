@@ -1,41 +1,40 @@
 """
-One-time offline export of the trained SADMC MLSTM PyTorch model to ONNX,
-so the Node.js backend can run inference via onnxruntime-node without any
-Python runtime dependency.
+Offline export of the trained SADMC EA-MRS PyTorch model to ONNX, so that the Node.js backend can run inference with
+onnxruntime-node without a Python runtime.
 
-Run with the venv that already has torch installed:
+Run with the virtual environment that has torch and onnx installed:
     SADMC-MT-FF-FL/sadmc-venv/bin/python HelmAndSaas/Saas/inference/export_to_onnx.py
 
-Reuses load_global_model() from local_pipeline_test.py verbatim (same
-sys.path trick) so this export uses the exact same model construction /
-state_dict loading path already verified to work.
+The model is the EA-MRS Transfer model trained centrally on all seven services (code/train_pooled_own.py) on features scaled
+by ONE fixed global MinMax scaler (model/v3/global_scaler.json, the same one used at serving). 33 inputs, no padding.
+Override the checkpoint with MODEL_PTH.
 
-Export uses a FIXED batch size of 1 (no dynamic_axes on the batch dim).
-MLSTM.forward() does `x1 = self.conv4(x); x1 = self.aap(x1); x1 = x1.squeeze()`
-which collapses both the batch and the spatial size-1 dims down to shape
-(128,) before adding to x2 — this only works reliably for batch=1, so we
-export accordingly and always run inference one service at a time.
+The export uses a FIXED batch size of 1 (no dynamic_axes). MLSTM.forward() does `x1 = self.conv4(x); x1 = self.aap(x1);
+x1 = x1.squeeze()`, which collapses both the batch and the spatial size-1 dimensions to shape (128,) before adding to x2;
+this only works for batch=1, so inference always runs one service at a time.
 """
 import os
 import sys
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-sys.path.append(os.path.join(PROJECT_ROOT, "SADMC-MT-FF-FL", "code"))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import torch  # noqa: E402
 import onnx  # noqa: E402
 
-sys.path.insert(0, PROJECT_ROOT)
-from local_pipeline_test import load_global_model  # noqa: E402
+from model_loader import PROJECT_ROOT, load_global_model  # noqa: E402
 
-OUTPUT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model", "sadmc_model.onnx")
+NUM_FEATURES = 33
+DATASET = os.getenv("SADMC_DATASET", "ssh_bs-support_v3_globalscale")
+MODEL_PTH = os.getenv("MODEL_PTH") or os.path.join(PROJECT_ROOT, "SADMC-MT-FF-FL", "saved_models", DATASET, "pooled_last", "sadmc_global_model_own.pth")
+OUTPUT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model", "v3", "sadmc_model.onnx")
 
 
 def main():
-    model = load_global_model()
+    os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
+    model = load_global_model(model_path=MODEL_PTH, num_features=NUM_FEATURES)
     model.eval()
 
-    dummy_input = torch.zeros(1, 1, 36, dtype=torch.float32)
+    dummy_input = torch.zeros(1, 1, NUM_FEATURES, dtype=torch.float32)
 
     torch.onnx.export(
         model,

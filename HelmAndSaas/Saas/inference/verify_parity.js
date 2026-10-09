@@ -3,49 +3,27 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { runRaw } from "./onnxModel.js";
 import { ANOMALY_CLASSES } from "./classes.js";
+import { fixedNormalise } from "./fixedScaler.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const FIXTURES_PATH = path.join(__dirname, "fixtures", "torch_reference.json");
+const ref = JSON.parse(readFileSync(path.join(__dirname, "fixtures", "torch_reference_v3.json"), "utf-8"));
 const PROB_TOLERANCE = 1e-4;
+const NORM_TOLERANCE = 1e-5;
+let allPass = true;
 
-async function main() {
-  const fixtures = JSON.parse(readFileSync(FIXTURES_PATH, "utf-8"));
-  let allPass = true;
-
-  console.log(
-    `${"idx".padEnd(4)} ${"torch_class".padEnd(14)} ${"onnx_class".padEnd(14)} ${"max_prob_diff".padEnd(15)} result`
-  );
-
-  for (let i = 0; i < fixtures.length; i++) {
-    const fixture = fixtures[i];
-    const { probs } = await runRaw(fixture.input);
-
-    let onnxClass = 0;
-    for (let c = 1; c < probs.length; c++) {
-      if (probs[c] > probs[onnxClass]) onnxClass = c;
-    }
-
-    const maxProbDiff = Math.max(...probs.map((p, c) => Math.abs(p - fixture.probs[c])));
-    const classMatch = onnxClass === fixture.pred_class;
-    const probsMatch = maxProbDiff < PROB_TOLERANCE;
-    const pass = classMatch && probsMatch;
-    allPass = allPass && pass;
-
-    console.log(
-      `${String(i).padEnd(4)} ${ANOMALY_CLASSES[fixture.pred_class].padEnd(14)} ${ANOMALY_CLASSES[onnxClass].padEnd(14)} ${maxProbDiff.toExponential(2).padEnd(15)} ${pass ? "PASS" : "FAIL"}`
-    );
-  }
-
-  if (allPass) {
-    console.log(`\nAll ${fixtures.length} fixtures PASS (tolerance ${PROB_TOLERANCE}).`);
-    process.exit(0);
-  } else {
-    console.error(`\nParity check FAILED — see FAIL rows above.`);
-    process.exit(1);
-  }
+// normalise (fixedScaler.js) + ONNX vs torch, per fixture
+console.log(`${"idx".padEnd(4)} ${"service".padEnd(10)} ${"torch".padEnd(14)} ${"onnx".padEnd(14)} ${"norm_diff".padEnd(11)} ${"prob_diff".padEnd(11)} result`);
+for (let i = 0; i < ref.fixtures.length; i++) {
+  const fx = ref.fixtures[i];
+  const input = fixedNormalise(fx.input);
+  const normDiff = Math.max(...Array.from(input, (v, j) => Math.abs(v - fx.normalised[j])));
+  const { probs } = await runRaw(input);
+  let c = 0;
+  for (let k = 1; k < probs.length; k++) if (probs[k] > probs[c]) c = k;
+  const probDiff = Math.max(...probs.map((p, k) => Math.abs(p - fx.probs[k])));
+  const pass = c === fx.pred_class && probDiff < PROB_TOLERANCE && normDiff < NORM_TOLERANCE;
+  allPass = allPass && pass;
+  console.log(`${String(i).padEnd(4)} ${fx.service.padEnd(10)} ${ANOMALY_CLASSES[fx.pred_class].padEnd(14)} ${ANOMALY_CLASSES[c].padEnd(14)} ${normDiff.toExponential(1).padEnd(11)} ${probDiff.toExponential(1).padEnd(11)} ${pass ? "PASS" : "FAIL"}`);
 }
-
-main().catch((err) => {
-  console.error("[verify_parity.js] error:", err);
-  process.exit(1);
-});
+console.log(allPass ? `\nAll checks PASS (norm<${NORM_TOLERANCE}, prob<${PROB_TOLERANCE}).` : "\nParity check FAILED - see FAIL rows above.");
+process.exit(allPass ? 0 : 1);

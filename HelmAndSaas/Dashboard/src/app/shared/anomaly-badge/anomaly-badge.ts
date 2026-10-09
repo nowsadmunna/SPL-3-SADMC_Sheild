@@ -1,4 +1,5 @@
 import { Component, Input } from '@angular/core';
+import { ANOMALY_INFO } from '../../core/anomaly-info';
 import { AnomalyType } from '../../core/models';
 
 const STYLES: Record<AnomalyType, string> = {
@@ -16,18 +17,34 @@ export const ANOMALY_BORDER_CLASS: Record<AnomalyType, string> = {
   NETWORK_DELAY: 'border-l-sky-400 dark:border-l-sky-500',
 };
 
+const NO_DATA_STYLE = 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300';
+
 @Component({
   selector: 'app-anomaly-badge',
   template: `
-    <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium" [class]="classes">
-      {{ type }}
+    <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium" [class]="classes" [title]="tooltip">
+      {{ label }}
     </span>
   `,
 })
 export class AnomalyBadge {
-  @Input({ required: true }) type: AnomalyType = 'NORMAL';
+  /** a verdict, or NO_DATA when the agent has not reported recently */
+  @Input({ required: true }) type: AnomalyType | 'NO_DATA' = 'NORMAL';
+  /** show the raw code instead of the plain-language name (tables that want the exact value) */
+  @Input() raw = false;
+
+  get label(): string {
+    if (this.type === 'NO_DATA') return 'No data';
+    return this.raw ? this.type : ANOMALY_INFO[this.type].label;
+  }
+
+  get tooltip(): string {
+    if (this.type === 'NO_DATA') return 'No metrics received recently. The agent may be offline.';
+    const info = ANOMALY_INFO[this.type];
+    return this.type === 'NORMAL' ? info.what : `${this.type}: ${info.what}`;
+  }
 
   get classes(): string {
-    return STYLES[this.type] ?? STYLES['NORMAL'];
+    return this.type === 'NO_DATA' ? NO_DATA_STYLE : (STYLES[this.type] ?? STYLES['NORMAL']);
   }
 }

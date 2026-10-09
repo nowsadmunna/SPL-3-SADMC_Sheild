@@ -1,31 +1,85 @@
-# Dependencies
+# ───────────────────────── Dependencies and build output ─────────────────────────
 node_modules/
-
-# Python virtual environments
 venv/
 sadmc-venv/
+.venv/
+env/
 __pycache__/
-*.pyc
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+dist/
+build/
+out-tsc/
+coverage/
+.angular/
+*.tsbuildinfo
 
-# Env / secrets
+# ───────────────────────── Secrets and credentials (never commit) ─────────────────────────
 .env
 .env.*
 !.env.example
+.agent_env
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+*.kubeconfig
+kubeconfig
 
-# Build output
-dist/
-.angular/cache/
-build/
-
-# Logs
+# ───────────────────────── Logs, local state ─────────────────────────
 *.log
 npm-debug.log*
+*.pid
+*.done
+*.sock
 
-# OS / editor
+# ───────────────────────── OS / editor / local tooling ─────────────────────────
 .DS_Store
 Thumbs.db
+~$*
+.idea/
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
+.claude/
+
+# ───────────────────────── Research folder: only what is needed to create a dataset and train a model ─────────────────────────
+# Everything else there (datasets, checkpoints, paper code, leave-one-service-out and leakage checks, model comparisons, notebooks) stays on
+# this machine only. The served model is committed under HelmAndSaas/Saas/inference/model/v3/.
+/SADMC-MT-FF-FL/*
+!/SADMC-MT-FF-FL/requirements.txt
+!/SADMC-MT-FF-FL/code/
+/SADMC-MT-FF-FL/code/*
+!/SADMC-MT-FF-FL/code/network_fed.py
+!/SADMC-MT-FF-FL/code/train_pooled_own.py
+!/SADMC-MT-FF-FL/own_dataset/
+/SADMC-MT-FF-FL/own_dataset/*
+!/SADMC-MT-FF-FL/own_dataset/scripts/
+/SADMC-MT-FF-FL/own_dataset/scripts/*
+!/SADMC-MT-FF-FL/own_dataset/scripts/injector.py
+!/SADMC-MT-FF-FL/own_dataset/scripts/metric_queries.py
+!/SADMC-MT-FF-FL/own_dataset/scripts/v3/
+/SADMC-MT-FF-FL/own_dataset/scripts/v3/*
+!/SADMC-MT-FF-FL/own_dataset/scripts/v3/feature_defs.py
+!/SADMC-MT-FF-FL/own_dataset/scripts/v3/collector_v3.py
+!/SADMC-MT-FF-FL/own_dataset/scripts/v3/injector_v3.py
+!/SADMC-MT-FF-FL/own_dataset/scripts/v3/run_collection_v3.py
+!/SADMC-MT-FF-FL/own_dataset/scripts/v3/build_v3_dataset.py
+!/SADMC-MT-FF-FL/own_dataset/scripts/v3/export_mul_class_v3.py
+*.pth
+*.pt
+*.ckpt
+
+# ───────────────────────── Reports and report assets (submitted separately) ─────────────────────────
+*.docx
+/Final_Report_Diagrams/
+
+# ───────────────────────── My notes (study guides, runbooks, page documentation; for my own understanding) ─────────────────────────
+/understanding/
+/HelmAndSaas/tools/

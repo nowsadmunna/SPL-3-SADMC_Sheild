@@ -1,3 +1,4 @@
+import os
 import torch
 import torchvision
 import torchvision.transforms as transforms
@@ -697,18 +698,28 @@ class MLSTM(nn.Module):
         self.fc = nn.Linear(self.conv3_nf, self.num_classes)
         self.convDrop = nn.Dropout(self.fc_drop_p)
 
-        self.conv1.weight = Parameter(modelFCN[0].data)
-        self.conv2.weight = Parameter(modelFCN[4].data)
-        self.conv3.weight = Parameter(modelFCN[8].data)
-        self.bn1.weight = Parameter(modelFCN[2].data)
-        self.bn2.weight = Parameter(modelFCN[6].data)
-        self.bn3.weight = Parameter(modelFCN[10].data)
-        self.conv1.bias = Parameter(modelFCN[1].data)
-        self.bn1.bias = Parameter(modelFCN[3].data)
-        self.conv2.bias = Parameter(modelFCN[5].data)
-        self.bn2.bias = Parameter(modelFCN[7])
-        self.conv3.bias = Parameter(modelFCN[9])
-        self.bn3.bias = Parameter(modelFCN[11].data)
+        # Transfer step (paper Eq. 22-23): conv1-3 / bn1-3 start from the peer's weights.
+        # The original code wrapped the peer's tensor memory directly (Parameter(t.data) shares storage),
+        # so every optimizer step of THIS node silently rewrote the peer's stored weights in the shared
+        # pool. Later nodes then received weights already fine-tuned by an earlier node, and the
+        # similarity search ran on a mutating pool - the nodes were not independent as Algorithm 1
+        # ("for each node in parallel") assumes. Measured: one training step changed the peer's stored
+        # conv1.weight by 1e-3. We now copy. SADMC_SHARE_PEER_WEIGHTS=1 restores the original behaviour
+        # (kept only to reproduce old results).
+        share = os.environ.get("SADMC_SHARE_PEER_WEIGHTS", "0") == "1"
+        take = (lambda t: Parameter(t.data)) if share else (lambda t: Parameter(t.detach().clone()))
+        self.conv1.weight = take(modelFCN[0])
+        self.conv2.weight = take(modelFCN[4])
+        self.conv3.weight = take(modelFCN[8])
+        self.bn1.weight = take(modelFCN[2])
+        self.bn2.weight = take(modelFCN[6])
+        self.bn3.weight = take(modelFCN[10])
+        self.conv1.bias = take(modelFCN[1])
+        self.bn1.bias = take(modelFCN[3])
+        self.conv2.bias = take(modelFCN[5])
+        self.bn2.bias = take(modelFCN[7])
+        self.conv3.bias = take(modelFCN[9])
+        self.bn3.bias = take(modelFCN[11])
     def forward(self, x):
         x1 = self.conv4(x)
         x1 = self.aap(x1)

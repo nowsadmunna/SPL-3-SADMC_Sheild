@@ -1,0 +1,153 @@
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Agent-specific part (not copied): which services, and how the node-side script's output is obtained.
+# A "service key" is "<namespace>/<name>"; everything copied above only sees these strings.
+# ---------------------------------------------------------------------------------------------------------------------
+import concurrent.futures
+import time
+
+import httpx
+
+APP_LINE = re.compile(
+    r"^(request_duration_seconds_(count|sum)[{]|process_open_fds |process_cpu_seconds_total |go_gc_duration_seconds_sum |"
+    r"jvm_threads_current |go_goroutines |nodejs_active_handles_total )")
+CADVISOR_LINE = re.compile(r"^(" + "|".join(CADVISOR_MAP) + r")[{]")
+
+
+def sh(cmd, timeout=60):
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout).stdout
+
+
+def key_of(namespace, name):
+    return f"{namespace}/{name}"
+
+
+def service_endpoints(core_v1, services):
+    """services: [(namespace, name)] -> {key: {"ip", "port"}} from the Service objects (first port)."""
+    out = {}
+    wanted = set(services)
+    for s in core_v1.list_service_for_all_namespaces().items:
+        k = (s.metadata.namespace, s.metadata.name)
+        if k in wanted and s.spec.cluster_ip and s.spec.ports:
+            out[key_of(*k)] = {"ip": s.spec.cluster_ip, "port": s.spec.ports[0].port}
+    return out
+
+
+def pod_state(core_v1, services):
+    """-> (uid_to_key, restarts, ready) for the pods behind `services` ([(namespace, name)])."""
+    wanted = set(services)
+    uid_to_key, restarts, ready = {}, {}, {}
+    for p in core_v1.list_pod_for_all_namespaces().items:
+        name = re.sub(r"-[0-9a-f]{6,10}-[a-z0-9]{5}$", "", p.metadata.name)
+        if (p.metadata.namespace, name) not in wanted:
+            continue
+        k = key_of(p.metadata.namespace, name)
+        uid_to_key[p.metadata.uid.replace("-", "_")] = k
+        st = p.status.container_statuses or []
+        restarts[k] = restarts.get(k, 0) + sum(c.restart_count for c in st)
+        ready[k] = ready.get(k, 0) + (1 if st and all(c.ready for c in st) else 0)
+    return uid_to_key, restarts, ready
+
+
+def transport_mode():
+    """"incluster" when running as a pod (cAdvisor, the apps and the probe are read over the pod network),
+    "node-exec" in the lab (one `docker exec` into the minikube node). V3_TRANSPORT forces one."""
+    forced = os.getenv("V3_TRANSPORT")
+    if forced:
+        return forced
+    return "incluster" if os.getenv("KUBERNETES_SERVICE_HOST") else "node-exec"
+
+
+def cadvisor_urls(core_v1):
+    """V3_CADVISOR_URLS (comma separated) or the endpoints of the Service named in V3_CADVISOR_SERVICE ("<ns>/<name>")."""
+    explicit = os.getenv("V3_CADVISOR_URLS")
+    if explicit:
+        return [u.strip() for u in explicit.split(",") if u.strip()]
+    ref = os.getenv("V3_CADVISOR_SERVICE")
+    if not ref:
+        return []
+    ns, name = ref.split("/")
+    ep = core_v1.read_namespaced_endpoints(name, ns)
+    port = int(os.getenv("V3_CADVISOR_PORT", "8080"))
+    return [f"http://{a.ip}:{port}/metrics" for sub in (ep.subsets or []) for a in (sub.addresses or [])]
+
+
+def _fetch_service(client, key, ep):
+    base = f"http://{ep['ip']}:{ep['port']}"
+    app_lines = []
+    try:
+        r = client.get(f"{base}/metrics", timeout=3)
+        app_lines = [l for l in r.text.splitlines() if APP_LINE.match(l)]
+    except httpx.HTTPError:
+        pass
+    path = PROBE_PATHS.get(key.split("/", 1)[1], "/")
+    probes = []
+    for _ in range(PROBES_PER_CYCLE):
+        t0 = time.perf_counter()
+        try:
+            r = client.get(f"{base}{path}", timeout=2)
+            probes.append(f"{r.status_code} {time.perf_counter() - t0:.6f}")
+        except httpx.HTTPError:
+            probes.append("000 2.000000")
+    return key, app_lines, probes
+
+
+def incluster_sections(core_v1, endpoints):
+    sections = {"cadvisor": []}
+    with httpx.Client() as client:
+        for url in cadvisor_urls(core_v1):
+            try:
+                sections["cadvisor"] += [l for l in client.get(url, timeout=8).text.splitlines() if CADVISOR_LINE.match(l)]
+            except httpx.HTTPError:
+                pass
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+            for key, app_lines, probes in pool.map(lambda kv: _fetch_service(client, *kv), endpoints.items()):
+                sections[f"APP:{key}"] = app_lines
+                sections[f"PROBE:{key}"] = probes
+    return sections
+
+
+def node_script_for(ips):
+    """node_script() loops over the fixed SERVICES list; this builds the same script for any name -> ip map (lab transport)."""
+    names = "|".join(CADVISOR_MAP)
+    parts = [f"curl -s -m 8 {CADVISOR_URL} | grep -E '^({names})[{{]'", "echo '##END'"]
+    for s, ip in ips.items():
+        base = f"http://{ip}:80"
+        parts.append(f"echo '##APP {s}'")
+        parts.append(f"curl -s -m 3 {base}/metrics | grep -E '^(request_duration_seconds_(count|sum)[{{]|process_open_fds |process_cpu_seconds_total |"
+                     f"go_gc_duration_seconds_sum |jvm_threads_current |go_goroutines |nodejs_active_handles_total )'")
+        parts.append(f"echo '##PROBE {s}'")
+        parts.append(f"for i in $(seq {PROBES_PER_CYCLE}); do curl -s -o /dev/null -m 2 -w '%{{http_code}} %{{time_total}}\\n' "
+                     f"{base}{PROBE_PATHS.get(s, '/')}; done")
+    return "; ".join(parts)
+
+
+def node_exec_sections(endpoints):
+    """Lab transport: the same reads as incluster_sections, done inside the minikube node by one `docker exec`.
+    The script addresses services by bare name, so this mode supports services of one namespace at a time per name."""
+    by_name = {k.split("/", 1)[1]: k for k in endpoints}
+    ips = {name: endpoints[k]["ip"] for name, k in by_name.items()}
+    sec = split_sections(sh(["docker", "exec", NODE, "sh", "-c", node_script_for(ips)], 40))
+    sections = {"cadvisor": sec.get("cadvisor", [])}
+    for name, k in by_name.items():
+        sections[f"APP:{k}"] = sec.get(f"APP:{name}", [])
+        sections[f"PROBE:{k}"] = sec.get(f"PROBE:{name}", [])
+    return sections
+
+
+def sample_cluster(core_v1, services, endpoints):
+    """One raw sample per service key: {key: {raw_column: value}}.  services: [(namespace, name)]."""
+    uid_to_key, restarts, ready = pod_state(core_v1, services)
+    keys = list(endpoints)
+    sections = incluster_sections(core_v1, endpoints) if transport_mode() == "incluster" else node_exec_sections(endpoints)
+    cad = parse_cadvisor(sections.get("cadvisor", []), uid_to_key, keys)
+    rows = {}
+    for k in keys:
+        row = {}
+        row.update(cad.get(k, {}))
+        row.update(parse_app(sections.get(f"APP:{k}", [])))
+        row.update(parse_probe(sections.get(f"PROBE:{k}", [])))
+        row["restarts"], row["ready"] = restarts.get(k, 0), ready.get(k, 0)
+        rows[k] = row
+    return rows

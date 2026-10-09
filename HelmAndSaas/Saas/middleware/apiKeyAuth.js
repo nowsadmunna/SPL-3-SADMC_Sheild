@@ -13,6 +13,7 @@ export async function apiKeyAuth(req, res, next) {
     }
     req.tenantId = resolved.tenant_id;
     req.apiKeyId = resolved.api_key_id;
+    req.apiKeyName = resolved.key_name || null;
     next();
   } catch (err) {
     next(err);

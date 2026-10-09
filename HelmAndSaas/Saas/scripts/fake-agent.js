@@ -1,8 +1,7 @@
 /**
  * Simulates the real Python agent's request sequence (see
  * HelmAndSaas/Agent/agent/main.py + inference_client.py) against this
- * Node backend, without needing a Kubernetes cluster, Prometheus, or
- * Python at all. Exercises the exact same wire contract:
+ * Node backend, without needing a Kubernetes cluster or Python at all. Exercises the exact same wire contract:
  *   register -> loop { ingest -> (if anomaly) remediation/report }
  *
  * If FAKE_AGENT_API_KEY is not set, auto-provisions a throwaway tenant +
@@ -13,6 +12,7 @@
  *   node scripts/fake-agent.js --loop      # runs forever, ~15s interval, like the real agent
  */
 import crypto from "node:crypto";
+import { readFileSync } from "node:fs";
 
 const SAAS_ENDPOINT = process.env.SAAS_ENDPOINT || "http://localhost:8000";
 const CHECK_INTERVAL_SECONDS = parseInt(process.env.CHECK_INTERVAL_SECONDS || "15", 10);
@@ -51,6 +51,7 @@ async function runCycle(apiKey, clusterUuid, cycle) {
   const ingestResp = await postJson(`${SAAS_ENDPOINT}/v1/metrics/ingest`, apiKey, {
     timestamp: new Date().toISOString(),
     cluster_uuid: clusterUuid,
+    feature_set: "v3",
     services,
   });
 
@@ -68,19 +69,14 @@ async function runCycle(apiKey, clusterUuid, cycle) {
   }
 }
 
-/** Every 3rd cycle, one service gets a "memory-leak-shaped" vector (all -1s,
- * per verify_parity.py's fixture that the real model classifies as
- * MEMORY_LEAK) so the loop periodically exercises the anomaly path;
- * otherwise sends a plausible "normal load" vector. */
+/** Every 3rd cycle the vector is a real CPU_HOG sample from the verified fixtures (inference/fixtures/torch_reference_v3.json),
+ * so the loop periodically exercises the anomaly path; otherwise a real NORMAL sample is sent. */
+const FIXTURES = JSON.parse(readFileSync(new URL("../inference/fixtures/torch_reference_v3.json", import.meta.url), "utf-8")).fixtures;
+const NORMAL_VECTOR = FIXTURES.find((f) => f.pred_class === 0 && f.true_class === 0).input;
+const ANOMALY_VECTOR = FIXTURES.find((f) => f.pred_class === 1 && f.true_class === 1).input;
+
 function syntheticFeatureVector(cycle) {
-  if (cycle % 3 === 0) {
-    return Array(35).fill(-1.0);
-  }
-  return [
-    rand(0, 30), rand(0, 20), rand(0, 40), rand(0, 1), rand(0, 5), // cpu
-    rand(50, 300), rand(10, 100), rand(0, 5), rand(0, 2), rand(100, 400), // memory
-    ...Array.from({ length: 25 }, () => rand(0, 50)),
-  ];
+  return cycle % 3 === 0 ? ANOMALY_VECTOR : NORMAL_VECTOR;
 }
 
 function syntheticMetricsDict(cycle) {

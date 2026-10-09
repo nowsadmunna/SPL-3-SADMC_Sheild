@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { ACTIVE } from "./inference/featureSets.js";
 
 export const config = {
   port: parseInt(process.env.PORT || "8000", 10),
@@ -9,7 +10,7 @@ export const config = {
   bcryptCost: parseInt(process.env.BCRYPT_COST || "12", 10),
   apiKeyCacheTtlSeconds: parseInt(process.env.API_KEY_CACHE_TTL_SECONDS || "300", 10),
   inferenceMode: process.env.INFERENCE_MODE || "stub",
-  onnxModelPath: process.env.ONNX_MODEL_PATH || "./inference/model/sadmc_model.onnx",
+  onnxModelPath: process.env.ONNX_MODEL_PATH || ACTIVE.model,
 };
 
 function parseRefreshDays(value) {

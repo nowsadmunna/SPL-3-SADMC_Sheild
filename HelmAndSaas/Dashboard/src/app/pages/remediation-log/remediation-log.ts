@@ -3,6 +3,8 @@ import { DatePipe } from '@angular/common';
 import { ClusterService } from '../../core/cluster.service';
 import { EventsService } from '../../core/events.service';
 import { RemediationAction } from '../../core/models';
+import { actionText, agoDate, durationText } from '../../core/anomaly-info';
+import { AnomalyBadge } from '../../shared/anomaly-badge/anomaly-badge';
 
 const ACTION_BADGE_CLASS: Partial<Record<string, string>> = {
   THROTTLE_CPU: 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300',
@@ -15,13 +17,16 @@ const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 @Component({
   selector: 'app-remediation-log',
-  imports: [DatePipe],
+  imports: [DatePipe, AnomalyBadge],
   templateUrl: './remediation-log.html',
 })
 export class RemediationLog {
   readonly remediations = signal<RemediationAction[]>([]);
   readonly loading = signal(false);
   readonly actionBadgeClass = ACTION_BADGE_CLASS;
+  readonly actionText = actionText;
+  readonly agoDate = agoDate;
+  readonly durationText = durationText;
 
   readonly page = signal(1);
   readonly pageSize = signal(PAGE_SIZE_OPTIONS[0]);
@@ -74,6 +79,9 @@ export class RemediationLog {
               service_name: frame.service_name,
               namespace: frame.namespace,
               action_type: frame.action,
+              action_params: null,
+              anomaly_type: null,
+              reaction_seconds: null,
               status: frame.status as RemediationAction['status'],
               executed_at: frame.timestamp,
               duration_ms: null,

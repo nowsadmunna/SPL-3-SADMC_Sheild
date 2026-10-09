@@ -1,26 +1,32 @@
 import { config } from "../config.js";
-import { FEATURE_VECTOR_LENGTH } from "../inference/classes.js";
+import { FEATURE_SETS, resolveSet } from "../inference/featureSets.js";
+import { fixedNormalise } from "../inference/fixedScaler.js";
 
-let onnxModelPromise = null;
+const onnxModels = new Map();
 
-async function getOnnxModel() {
-  if (!onnxModelPromise) {
-    onnxModelPromise = import("../inference/onnxModel.js").then((m) => m.loadModel());
+async function getOnnxModel(setName) {
+  if (!onnxModels.has(setName)) {
+    onnxModels.set(setName, import("../inference/onnxModel.js").then((m) => m.loadModel(setName)));
   }
-  return onnxModelPromise;
+  return onnxModels.get(setName);
 }
 
 /**
- * predict(featureVector) -> { anomaly_type, confidence, is_anomaly }
+ * predict(featureVector, featureSet) -> { anomaly_type, confidence, is_anomaly }
  *
- * INFERENCE_MODE=stub  -> always NORMAL (used to build/verify the rest of
- *                         the pipeline before the real model is wired in).
- * INFERENCE_MODE=onnx  -> runs the exported SADMC MLSTM model.
+ * INFERENCE_MODE=stub  -> always NORMAL (used to build/verify the rest of the pipeline without the model).
+ * INFERENCE_MODE=onnx  -> scales the vector with the fixed global scaler and runs the exported SADMC model.
  */
-export async function predict(featureVector) {
-  if (!Array.isArray(featureVector) || featureVector.length !== FEATURE_VECTOR_LENGTH) {
+export async function predict(featureVector, featureSet) {
+  const setName = resolveSet(featureSet);
+  if (!setName) {
+    console.warn(`[inference] unknown feature_set '${featureSet}'; defaulting to NORMAL`);
+    return { anomaly_type: "NORMAL", confidence: 0, is_anomaly: false };
+  }
+  const expected = FEATURE_SETS[setName].length;
+  if (!Array.isArray(featureVector) || featureVector.length !== expected) {
     console.warn(
-      `[inference] malformed feature_vector (expected length ${FEATURE_VECTOR_LENGTH}, got ${featureVector?.length}); defaulting to NORMAL`
+      `[inference] malformed feature_vector for feature_set ${setName} (expected length ${expected}, got ${featureVector?.length}); defaulting to NORMAL`
     );
     return { anomaly_type: "NORMAL", confidence: 0, is_anomaly: false };
   }
@@ -29,6 +35,5 @@ export async function predict(featureVector) {
     return { anomaly_type: "NORMAL", confidence: 1.0, is_anomaly: false };
   }
 
-  const model = await getOnnxModel();
-  return model.predict(featureVector);
+  return (await getOnnxModel(setName)).predict(fixedNormalise(featureVector, setName));
 }

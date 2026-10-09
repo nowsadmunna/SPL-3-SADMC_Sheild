@@ -2,6 +2,7 @@ import { Component, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiKeyService } from '../../core/api-key.service';
 import { ApiKey, ApiKeyCreated } from '../../core/models';
+import { agoDate } from '../../core/anomaly-info';
 
 @Component({
   selector: 'app-settings',
@@ -13,6 +14,9 @@ export class Settings implements OnInit {
   readonly newKeyName = signal('');
   readonly justCreated = signal<ApiKeyCreated | null>(null);
   readonly creating = signal(false);
+  /** the key whose Revoke button was pressed once: a second press confirms (a revoked key stops every agent that uses it) */
+  readonly confirmRevoke = signal<string | null>(null);
+  readonly agoDate = agoDate;
 
   constructor(private readonly apiKeyService: ApiKeyService) {}
 
@@ -37,6 +41,12 @@ export class Settings implements OnInit {
   }
 
   async revoke(id: string): Promise<void> {
+    if (this.confirmRevoke() !== id) {
+      this.confirmRevoke.set(id);
+      setTimeout(() => this.confirmRevoke.update((c) => (c === id ? null : c)), 6000);
+      return;
+    }
+    this.confirmRevoke.set(null);
     await this.apiKeyService.revoke(id);
     await this.refresh();
   }

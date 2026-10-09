@@ -25,8 +25,13 @@ class RemediationExecutor:
                 self.apps_v1.patch_namespaced_deployment(service_name, namespace, patch)
 
             elif action == "RESTART_POD":
-                pods = self.core_v1.list_namespaced_pod(
-                    namespace, label_selector=f"app={service_name}")
+                # Use the Deployment's own selector: label conventions differ between apps
+                # (app=, name=, app.kubernetes.io/name=), so a hard-coded label silently matches nothing.
+                dep = self.apps_v1.read_namespaced_deployment(service_name, namespace)
+                selector = ",".join(f"{k}={v}" for k, v in (dep.spec.selector.match_labels or {}).items())
+                pods = self.core_v1.list_namespaced_pod(namespace, label_selector=selector)
+                if not pods.items:
+                    raise RuntimeError(f"no pods match selector '{selector}'")
                 for pod in pods.items:
                     self.core_v1.delete_namespaced_pod(pod.metadata.name, namespace)
                 # Kubernetes Deployment controller recreates pods automatically

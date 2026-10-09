@@ -158,6 +158,12 @@ class Injector:
             status = "timeout"
             logger.error("injection timed out for %s/%s", service, anomaly_type)
         finally:
+            # A failed/interrupted netem (e.g. the container restarted mid-injection)
+            # can leave the delay in place; with the label already flipped back to
+            # NORMAL those rows would be mislabelled. In the previous sweep this left
+            # ~40% of user's NORMAL rows with a 500 ms delay. Always clear it.
+            if anomaly_type == "NETWORK_LATENCY":
+                clear_stale_qdisc(self.docker_env, service)
             self.shared_state[service] = LABELS["NORMAL"]
         end_iso = datetime.now(timezone.utc).isoformat()
         self._log_event(service, anomaly_type, label, repeat, duration, start_iso, end_iso, status)

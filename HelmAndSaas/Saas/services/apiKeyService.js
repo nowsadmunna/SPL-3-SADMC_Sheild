@@ -60,17 +60,20 @@ export async function resolveApiKey(rawKey) {
   const cached = await redis.get(cacheKey);
   if (cached) {
     const parsed = JSON.parse(cached);
-    touchLastUsed(parsed.api_key_id).catch(() => {});
-    return parsed;
+    // entries written before the key name was cached have no `key_name`: treat them as a miss and refill from the database
+    if ("key_name" in parsed) {
+      touchLastUsed(parsed.api_key_id).catch(() => {});
+      return parsed;
+    }
   }
 
   const { rows } = await pool.query(
-    `SELECT id, tenant_id, key_hash FROM api_keys WHERE is_active = TRUE`
+    `SELECT id, tenant_id, key_hash, name FROM api_keys WHERE is_active = TRUE`
   );
 
   for (const row of rows) {
     if (await bcrypt.compare(rawKey, row.key_hash)) {
-      const value = { tenant_id: row.tenant_id, api_key_id: row.id };
+      const value = { tenant_id: row.tenant_id, api_key_id: row.id, key_name: row.name };
       await redis.set(cacheKey, JSON.stringify(value), "EX", config.apiKeyCacheTtlSeconds);
       touchLastUsed(row.id).catch(() => {});
       return value;
